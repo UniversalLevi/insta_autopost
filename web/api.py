@@ -429,9 +429,23 @@ async def upload_files(
     files: List[UploadFile] = File(...),
     _auth=Depends(check_auth),
 ):
-    """Upload media files and return URLs"""
+    """Upload media files and return URLs
+    
+    Supports two methods:
+    1. Cloudinary (recommended) - if CLOUDINARY_* env vars are set
+    2. Local server + Cloudflare tunnel (fallback)
+    """
     try:
-        # Create uploads directory if it doesn't exist
+        # Check if Cloudinary is configured
+        from .cloudinary_helper import is_cloudinary_configured, upload_to_cloudinary
+        use_cloudinary = is_cloudinary_configured()
+        
+        if use_cloudinary:
+            print("DEBUG: Using Cloudinary for file uploads")
+        else:
+            print("DEBUG: Cloudinary not configured, using local server")
+        
+        # Create uploads directory if it doesn't exist (for local fallback)
         upload_dir = Path("uploads")
         upload_dir.mkdir(exist_ok=True)
         
@@ -450,29 +464,42 @@ async def upload_files(
             unique_filename = f"{uuid.uuid4()}{file_ext}"
             file_path = upload_dir / unique_filename
             
-            # Save file
+            # Save file temporarily (always save locally first)
             with open(file_path, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
             
-            # Use Cloudflare tunnel URL if available, otherwise use request base URL
-            from .cloudflare_helper import get_base_url, get_cloudflare_url
-            base_url = get_base_url(str(request.base_url))
-            cloudflare_url = get_cloudflare_url()
+            file_size = file_path.stat().st_size
             
-            # Generate file URL
-            file_url = f"{base_url}/uploads/{unique_filename}"
-            
-            # Log for debugging
-            print(f"DEBUG: Upload file URL generated: {file_url}")
-            print(f"DEBUG: Cloudflare URL available: {cloudflare_url}")
-            print(f"DEBUG: Request base URL: {request.base_url}")
-            print(f"DEBUG: File saved at: {file_path}")
-            print(f"DEBUG: File size: {file_path.stat().st_size} bytes")
+            # Upload to Cloudinary if configured, otherwise use local server
+            if use_cloudinary:
+                # Upload to Cloudinary
+                cloudinary_url = upload_to_cloudinary(file_path, public_id=f"instaforge/{unique_filename}")
+                
+                if cloudinary_url:
+                    print(f"DEBUG: Uploaded to Cloudinary: {cloudinary_url}")
+                    file_url = cloudinary_url
+                else:
+                    # Fallback to local server if Cloudinary upload fails
+                    print(f"DEBUG: Cloudinary upload failed, falling back to local server")
+                    from .cloudflare_helper import get_base_url, get_cloudflare_url
+                    base_url = get_base_url(str(request.base_url))
+                    file_url = f"{base_url}/uploads/{unique_filename}"
+            else:
+                # Use Cloudflare tunnel URL if available, otherwise use request base URL
+                from .cloudflare_helper import get_base_url, get_cloudflare_url
+                base_url = get_base_url(str(request.base_url))
+                cloudflare_url = get_cloudflare_url()
+                
+                # Generate file URL
+                file_url = f"{base_url}/uploads/{unique_filename}"
+                
+                print(f"DEBUG: Using local server URL: {file_url}")
+                print(f"DEBUG: Cloudflare URL available: {cloudflare_url}")
             
             uploaded_urls.append({
                 "url": file_url,
                 "originalName": file.filename,
-                "size": file_path.stat().st_size,
+                "size": file_size,
                 "type": file.content_type,
             })
         
