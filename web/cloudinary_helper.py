@@ -4,6 +4,13 @@ import os
 from typing import Optional
 from pathlib import Path
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # dotenv not available, skip
+
 # Try to import cloudinary
 try:
     import cloudinary
