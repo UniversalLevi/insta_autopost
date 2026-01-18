@@ -249,19 +249,37 @@ class InstagramClient:
             return container_id
         except InstagramAPIError as e:
             # Add more context to the error
+            error_code = getattr(e, 'error_code', None)
+            error_subcode = getattr(e, 'error_subcode', None)
+            
             logger.error(
                 "Failed to create media container",
                 error=str(e),
-                error_code=getattr(e, 'error_code', None),
-                error_subcode=getattr(e, 'error_subcode', None),
+                error_code=error_code,
+                error_subcode=error_subcode,
                 media_url=media_url,
             )
+            
+            # If error 9004, provide more helpful error message
+            if error_code == 9004:
+                raise InstagramAPIError(
+                    f"Instagram cannot access the media URL (error 9004). "
+                    f"This usually means:\n"
+                    f"1) Cloudflare's trycloudflare.com is blocking Instagram's bot\n"
+                    f"2) The URL is returning HTML instead of the image\n"
+                    f"3) The server is blocking Instagram's crawler\n\n"
+                    f"Solution: Use a production static file host like AWS S3, Cloudinary, or Firebase Storage\n"
+                    f"URL: {media_url}\n"
+                    f"Original error: {str(e)}",
+                    error_code=9004,
+                    error_subcode=error_subcode,
+                )
             raise
     
     def _verify_media_url(self, url: str) -> bool:
         """
-        Verify that a media URL is accessible and returns correct content type.
-        This helps catch issues before sending to Instagram.
+        Verify that a media URL is accessible using Instagram's user agent.
+        This simulates what Instagram's crawler will do and catches blocking issues early.
         
         Args:
             url: Media URL to verify
@@ -273,47 +291,98 @@ class InstagramClient:
             InstagramAPIError: If URL is not accessible or returns wrong content type
         """
         try:
-            # Use a simple HEAD request to check accessibility
-            # Use a generic User-Agent that won't be blocked
+            # Use Instagram's actual user agent to test if Cloudflare will block it
+            # This is the user agent Instagram's crawler uses
             headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "User-Agent": "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
                 "Accept": "image/*,video/*,*/*",
             }
             
-            logger.debug("Verifying media URL accessibility", url=url)
+            logger.debug("Verifying media URL with Instagram's user agent", url=url)
             
+            # Test with HEAD request first (Instagram does this)
             response = self.session.head(
                 url,
                 headers=headers,
-                timeout=10,
+                timeout=15,
                 allow_redirects=True,
             )
             
+            status_code = response.status_code
+            content_type = response.headers.get("Content-Type", "").lower()
+            
+            logger.debug(
+                "Media URL verification result",
+                url=url,
+                status_code=status_code,
+                content_type=content_type,
+            )
+            
             # Check if we got a successful response
-            if response.status_code != 200:
+            if status_code != 200:
                 raise InstagramAPIError(
-                    f"Media URL returned status {response.status_code} instead of 200. "
-                    f"URL may not be publicly accessible. URL: {url}",
+                    f"Media URL returned status {status_code} instead of 200. "
+                    f"This means Instagram's crawler cannot access the URL. "
+                    f"Cloudflare's trycloudflare.com may be blocking Instagram's bot. "
+                    f"URL: {url}",
                     error_code=9004,
                 )
             
             # Verify Content-Type header
-            content_type = response.headers.get("Content-Type", "").lower()
-            is_image = any(ct in content_type for ct in ["image/", "image/jpeg", "image/png", "image/gif", "image/webp"])
-            is_video = any(ct in content_type for ct in ["video/", "video/mp4", "video/quicktime"])
+            is_image = any(ct in content_type for ct in ["image/jpeg", "image/png", "image/gif", "image/webp"])
+            is_video = any(ct in content_type for ct in ["video/mp4", "video/quicktime"])
+            
+            # If Content-Type is text/html, the server is likely returning an error page
+            if "text/html" in content_type:
+                raise InstagramAPIError(
+                    f"Media URL is returning HTML instead of an image/video. "
+                    f"This usually means Cloudflare is showing a blocking page or the server returned an error. "
+                    f"Content-Type: {content_type}. "
+                    f"Instagram will reject this with error 9004. "
+                    f"URL: {url}",
+                    error_code=9004,
+                )
             
             if not (is_image or is_video):
                 logger.warning(
-                    "Media URL Content-Type may be incorrect",
+                    "Media URL Content-Type may not be recognized by Instagram",
                     url=url,
                     content_type=content_type,
-                    expected="image/* or video/*",
                 )
-                # Don't fail here - Instagram might still accept it
-                # But log the warning
             
-            logger.debug(
-                "Media URL verification successful",
+            # Also test with GET request to ensure we get actual binary data
+            response_get = self.session.get(
+                url,
+                headers=headers,
+                timeout=15,
+                allow_redirects=True,
+                stream=True,
+            )
+            
+            if response_get.status_code != 200:
+                raise InstagramAPIError(
+                    f"Media URL GET request returned status {response_get.status_code}. "
+                    f"Instagram cannot access media from this URL. "
+                    f"URL: {url}",
+                    error_code=9004,
+                )
+            
+            # Read first few bytes to check if it's actually binary/image data
+            chunk = next(response_get.iter_content(chunk_size=1024), b"")
+            response_get.close()
+            
+            # Check if content looks like HTML (starts with <) or text
+            if chunk.startswith(b"<") or chunk.startswith(b"<!DOCTYPE") or chunk.startswith(b"<html"):
+                raise InstagramAPIError(
+                    f"Media URL is returning HTML/text instead of binary image/video data. "
+                    f"Cloudflare or the server is likely blocking Instagram's bot. "
+                    f"Instagram will reject this with error 9004. "
+                    f"URL: {url}",
+                    error_code=9004,
+                )
+            
+            logger.info(
+                "Media URL verified successfully - Instagram should be able to access it",
                 url=url,
                 content_type=content_type,
                 content_length=response.headers.get("Content-Length"),
@@ -323,18 +392,25 @@ class InstagramClient:
             
         except requests.exceptions.Timeout:
             raise InstagramAPIError(
-                f"Media URL verification timeout. URL may not be accessible. URL: {url}",
+                f"Media URL verification timeout. Instagram cannot access the URL. "
+                f"This often happens with Cloudflare tunnels blocking bot traffic. "
+                f"URL: {url}",
                 error_code=9004,
             )
         except requests.exceptions.RequestException as e:
             raise InstagramAPIError(
-                f"Media URL is not accessible: {str(e)}. URL: {url}",
+                f"Media URL is not accessible to Instagram's crawler: {str(e)}. "
+                f"Instagram will reject this with error 9004. "
+                f"URL: {url}",
                 error_code=9004,
             )
+        except InstagramAPIError:
+            # Re-raise our custom errors
+            raise
         except Exception as e:
-            # If verification fails but we can't determine why, log and continue
+            # For other errors, log warning but don't fail (Instagram might still work)
             logger.warning(
-                "Media URL verification failed, but continuing anyway",
+                "Media URL verification had an issue, but continuing anyway",
                 url=url,
                 error=str(e),
             )

@@ -170,15 +170,33 @@ async def create_post(request: Request, post_data: CreatePostRequest, _auth=Depe
                     url = post_data.urls[0]
                     original_error = error_msg
                     
-                    error_msg = (
-                        "Instagram rejected the media URL. Possible reasons:\n"
-                        "1) The URL is not publicly accessible\n"
-                        "2) The URL must be HTTPS (not HTTP)\n"
-                        "3) Instagram's servers cannot fetch the media\n"
-                        "4) The file may not be served correctly\n\n"
-                        f"Media URL used: {url}\n"
-                        f"Original error: {original_error}"
-                    )
+                    # Check if it's a Cloudflare tunnel URL
+                    is_cloudflare_tunnel = "trycloudflare.com" in url or "cfargotunnel.com" in url
+                    
+                    if is_cloudflare_tunnel:
+                        error_msg = (
+                            "Instagram cannot access the media URL. "
+                            "Cloudflare's trycloudflare.com is blocking Instagram's bot.\n\n"
+                            "SOLUTION: Use a production static file host instead:\n"
+                            "• AWS S3 (recommended)\n"
+                            "• Cloudinary\n"
+                            "• Firebase Storage\n"
+                            "• DigitalOcean Spaces\n"
+                            "• Supabase Storage\n\n"
+                            f"Media URL used: {url}\n"
+                            f"Original error: {original_error}"
+                        )
+                    else:
+                        error_msg = (
+                            "Instagram rejected the media URL (error 9004). Possible reasons:\n"
+                            "1) The URL is not publicly accessible\n"
+                            "2) The URL must be HTTPS (not HTTP)\n"
+                            "3) Instagram's servers cannot fetch the media\n"
+                            "4) The file may not be served correctly\n"
+                            "5) The server is blocking Instagram's bot\n\n"
+                            f"Media URL used: {url}\n"
+                            f"Original error: {original_error}"
+                        )
                 
                 # Return 400 Bad Request instead of 200 OK
                 raise HTTPException(status_code=400, detail=error_msg)
