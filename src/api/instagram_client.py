@@ -198,13 +198,28 @@ class InstagramClient:
         Returns:
             Container ID for publishing
         """
+        # Verify media URL is accessible before sending to Instagram
+        media_url = image_url or video_url
+        if media_url:
+            self._verify_media_url(media_url)
+        
         params = {"caption": caption}
         
         if image_url:
             params["image_url"] = image_url
+            logger.info(
+                "Creating image media container",
+                image_url=image_url,
+                url_length=len(image_url),
+            )
         elif video_url:
             params["media_type"] = "VIDEO"
             params["video_url"] = video_url
+            logger.info(
+                "Creating video media container",
+                video_url=video_url,
+                url_length=len(video_url),
+            )
         else:
             raise InstagramAPIError("Either image_url or video_url must be provided")
         
@@ -214,8 +229,116 @@ class InstagramClient:
         if user_tags:
             params["user_tags"] = ",".join(user_tags)
         
-        response = self._make_request("POST", "me/media", data=params)
-        return response["id"]
+        # Log the exact request being sent
+        logger.debug(
+            "Sending media container creation request to Instagram",
+            endpoint="me/media",
+            has_image_url=bool(image_url),
+            has_video_url=bool(video_url),
+            params_keys=list(params.keys()),
+        )
+        
+        try:
+            response = self._make_request("POST", "me/media", data=params)
+            container_id = response.get("id")
+            logger.info(
+                "Media container created successfully",
+                container_id=container_id,
+                media_url=media_url,
+            )
+            return container_id
+        except InstagramAPIError as e:
+            # Add more context to the error
+            logger.error(
+                "Failed to create media container",
+                error=str(e),
+                error_code=getattr(e, 'error_code', None),
+                error_subcode=getattr(e, 'error_subcode', None),
+                media_url=media_url,
+            )
+            raise
+    
+    def _verify_media_url(self, url: str) -> bool:
+        """
+        Verify that a media URL is accessible and returns correct content type.
+        This helps catch issues before sending to Instagram.
+        
+        Args:
+            url: Media URL to verify
+            
+        Returns:
+            True if URL is accessible
+            
+        Raises:
+            InstagramAPIError: If URL is not accessible or returns wrong content type
+        """
+        try:
+            # Use a simple HEAD request to check accessibility
+            # Use a generic User-Agent that won't be blocked
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept": "image/*,video/*,*/*",
+            }
+            
+            logger.debug("Verifying media URL accessibility", url=url)
+            
+            response = self.session.head(
+                url,
+                headers=headers,
+                timeout=10,
+                allow_redirects=True,
+            )
+            
+            # Check if we got a successful response
+            if response.status_code != 200:
+                raise InstagramAPIError(
+                    f"Media URL returned status {response.status_code} instead of 200. "
+                    f"URL may not be publicly accessible. URL: {url}",
+                    error_code=9004,
+                )
+            
+            # Verify Content-Type header
+            content_type = response.headers.get("Content-Type", "").lower()
+            is_image = any(ct in content_type for ct in ["image/", "image/jpeg", "image/png", "image/gif", "image/webp"])
+            is_video = any(ct in content_type for ct in ["video/", "video/mp4", "video/quicktime"])
+            
+            if not (is_image or is_video):
+                logger.warning(
+                    "Media URL Content-Type may be incorrect",
+                    url=url,
+                    content_type=content_type,
+                    expected="image/* or video/*",
+                )
+                # Don't fail here - Instagram might still accept it
+                # But log the warning
+            
+            logger.debug(
+                "Media URL verification successful",
+                url=url,
+                content_type=content_type,
+                content_length=response.headers.get("Content-Length"),
+            )
+            
+            return True
+            
+        except requests.exceptions.Timeout:
+            raise InstagramAPIError(
+                f"Media URL verification timeout. URL may not be accessible. URL: {url}",
+                error_code=9004,
+            )
+        except requests.exceptions.RequestException as e:
+            raise InstagramAPIError(
+                f"Media URL is not accessible: {str(e)}. URL: {url}",
+                error_code=9004,
+            )
+        except Exception as e:
+            # If verification fails but we can't determine why, log and continue
+            logger.warning(
+                "Media URL verification failed, but continuing anyway",
+                url=url,
+                error=str(e),
+            )
+            return True
     
     @retry(
         stop=stop_after_attempt(3),

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InstaForge - Published Posts</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <h2 class="nav-title">InstaForge</h2>
+            <div class="nav-links">
+                <a href="/" class="nav-link">Post</a>
+                <a href="/posts" class="nav-link active">Published</a>
+                <a href="/logs" class="nav-link">Logs</a>
+                <a href="/config" class="nav-link">Config</a>
+                <a href="#" id="logoutBtn" class="nav-link">Logout</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container">
+        <div class="page-header">
+            <h1>Published Posts</h1>
+            <p>View posts published to Instagram</p>
+            <button id="refreshBtn" class="btn btn-secondary">Refresh</button>
+        </div>
+
+        <div id="loadingIndicator" class="loading-spinner" style="display: none;">Loading...</div>
+
+        <div id="postsContainer" class="posts-grid">
+            <p class="empty-state">Loading published posts...</p>
+        </div>
+    </main>
+
+    <script src="/static/js/app.js"></script>
+    <script src="/static/js/posts.js"></script>
+</body>
+</html>

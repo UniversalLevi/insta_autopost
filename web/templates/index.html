@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InstaForge - Post to Instagram</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <h2 class="nav-title">InstaForge</h2>
+            <div class="nav-links">
+                <a href="/" class="nav-link active">Post</a>
+                <a href="/posts" class="nav-link">Published</a>
+                <a href="/logs" class="nav-link">Logs</a>
+                <a href="/config" class="nav-link">Config</a>
+                <a href="#" id="logoutBtn" class="nav-link">Logout</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container">
+        <div class="page-header">
+            <h1>Create Instagram Post</h1>
+            <p>Post images, videos, carousels, or reels to Instagram</p>
+        </div>
+
+        <div class="post-form-container">
+            <form id="postForm" class="post-form">
+                <!-- Media Type Selection -->
+                <div class="form-section">
+                    <label class="form-label">Media Type</label>
+                    <div class="media-type-selector">
+                        <label class="radio-label">
+                            <input type="radio" name="media_type" value="image" checked>
+                            <span>Image</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="media_type" value="video">
+                            <span>Video</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="media_type" value="carousel">
+                            <span>Carousel</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="media_type" value="reels">
+                            <span>Reels</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Media Input Method Toggle -->
+                <div class="form-section">
+                    <label class="form-label">Media Source</label>
+                    <div class="media-source-selector">
+                        <label class="radio-label">
+                            <input type="radio" name="media_source" value="upload" checked>
+                            <span>Upload Files</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="media_source" value="url">
+                            <span>Use URLs</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- File Upload Section -->
+                <div class="form-section" id="uploadSection">
+                    <label class="form-label">Upload Media Files</label>
+                    <div id="dropZone" class="drop-zone">
+                        <div class="drop-zone-content">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            <p class="drop-zone-text">Drag and drop files here or click to browse</p>
+                            <p class="drop-zone-hint">Supports images (JPG, PNG) and videos (MP4, MOV)</p>
+                            <input type="file" id="fileInput" multiple accept="image/*,video/*" style="display: none;">
+                            <button type="button" class="btn btn-secondary" onclick="document.getElementById('fileInput').click()">Browse Files</button>
+                        </div>
+                    </div>
+                    <div id="uploadedFiles" class="uploaded-files"></div>
+                    <button type="button" id="addMoreFilesBtn" class="btn btn-secondary" style="display: none; margin-top: 0.5rem;">Add More Files</button>
+                </div>
+
+                <!-- URL Input Section -->
+                <div class="form-section" id="urlSection" style="display: none;">
+                    <label for="media_urls" class="form-label">Media URLs (HTTPS required)</label>
+                    <div id="mediaUrlsContainer">
+                        <input type="url" id="media_urls" name="media_urls[]" class="form-input" placeholder="https://example.com/image.jpg">
+                    </div>
+                    <button type="button" id="addMediaBtn" class="btn btn-secondary" style="display: none;">Add More Media</button>
+                    <small class="form-help">For carousels, add multiple URLs. For reels, use one video URL.</small>
+                </div>
+
+                <!-- Account Selection -->
+                <div class="form-section">
+                    <label for="account_id" class="form-label">Account</label>
+                    <select id="account_id" name="account_id" class="form-input" required>
+                        <option value="">Loading accounts...</option>
+                    </select>
+                </div>
+
+                <!-- Caption -->
+                <div class="form-section">
+                    <label for="caption" class="form-label">Caption</label>
+                    <textarea id="caption" name="caption" class="form-input" rows="4" placeholder="Write your caption here..."></textarea>
+                    <div class="char-counter">
+                        <span id="charCount">0</span> / 2200 characters
+                    </div>
+                </div>
+
+                <!-- Hashtags -->
+                <div class="form-section">
+                    <label for="hashtags" class="form-label">Hashtags</label>
+                    <input type="text" id="hashtags" name="hashtags" class="form-input" placeholder="comma, separated, hashtags">
+                    <small class="form-help">Enter hashtags separated by commas (without #)</small>
+                </div>
+
+                <!-- Post Options -->
+                <div class="form-section">
+                    <label class="form-label">Post Options</label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="publish_now" name="publish_now" checked>
+                        <span>Publish immediately</span>
+                    </label>
+                    <small class="form-help">Uncheck to save as draft</small>
+                </div>
+
+                <!-- Preview Section -->
+                <div class="form-section" id="previewSection" style="display: none;">
+                    <label class="form-label">Preview</label>
+                    <div id="previewContainer" class="preview-container"></div>
+                </div>
+
+                <!-- Submit Button -->
+                <div class="form-section">
+                    <button type="submit" id="submitBtn" class="btn btn-primary btn-large">Create Post</button>
+                    <div id="postStatus" class="status-message" style="display: none;"></div>
+                </div>
+            </form>
+        </div>
+    </main>
+
+    <script src="/static/js/app.js"></script>
+    <script src="/static/js/posting.js"></script>
+</body>
+</html>

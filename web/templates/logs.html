@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InstaForge - Activity Logs</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <h2 class="nav-title">InstaForge</h2>
+            <div class="nav-links">
+                <a href="/" class="nav-link">Post</a>
+                <a href="/posts" class="nav-link">Published</a>
+                <a href="/logs" class="nav-link active">Logs</a>
+                <a href="/config" class="nav-link">Config</a>
+                <a href="#" id="logoutBtn" class="nav-link">Logout</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container">
+        <div class="page-header">
+            <h1>Activity Logs</h1>
+            <div class="log-controls">
+                <select id="logLevel" class="form-input">
+                    <option value="">All Levels</option>
+                    <option value="INFO">INFO</option>
+                    <option value="WARNING">WARNING</option>
+                    <option value="ERROR">ERROR</option>
+                </select>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="autoRefresh" checked>
+                    <span>Auto-refresh</span>
+                </label>
+                <button id="refreshLogsBtn" class="btn btn-secondary">Refresh</button>
+            </div>
+        </div>
+
+        <div id="logsContainer" class="logs-container">
+            <p class="empty-state">Loading logs...</p>
+        </div>
+    </main>
+
+    <script src="/static/js/app.js"></script>
+    <script src="/static/js/logs.js"></script>
+</body>
+</html>
