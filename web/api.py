@@ -109,11 +109,33 @@ async def create_post(request: Request, post_data: CreatePostRequest, _auth=Depe
         
         # Build PostMedia object
         if media_type == "carousel":
+            # Instagram requires 2-10 items for carousel posts
+            if len(post_data.urls) < 2:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Carousel posts require 2-10 media items. You provided {len(post_data.urls)}. Please add more files or select a different media type (Image/Video)."
+                )
+            if len(post_data.urls) > 10:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Carousel posts can have maximum 10 items. You provided {len(post_data.urls)}. Please remove {len(post_data.urls) - 10} file(s)."
+                )
+            
             # Create children for carousel
             children = []
             for url in post_data.urls:
+                # Determine media type from URL extension
+                url_lower = url.lower()
+                if url_lower.endswith((".jpg", ".jpeg", ".png", ".webp")):
+                    child_type = "image"
+                elif url_lower.endswith((".mp4", ".mov", ".avi", ".mkv")):
+                    child_type = "video"
+                else:
+                    # Default to image if unknown
+                    child_type = "image"
+                
                 children.append(PostMedia(
-                    media_type="image" if url.lower().endswith((".jpg", ".jpeg", ".png")) else "video",
+                    media_type=child_type,
                     url=HttpUrl(url),
                 ))
             
@@ -123,10 +145,21 @@ async def create_post(request: Request, post_data: CreatePostRequest, _auth=Depe
                 caption=post_data.caption,
             )
         else:
-            # Single media
+            # Single media - validate we have exactly one URL
+            if not post_data.urls or len(post_data.urls) == 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"{media_type.capitalize()} posts require 1 media URL. Please upload or provide a URL."
+                )
+            if len(post_data.urls) > 1:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"{media_type.capitalize()} posts require exactly 1 media URL. You provided {len(post_data.urls)}. Use Carousel type for multiple files or select only one file."
+                )
+            
             media = PostMedia(
                 media_type=media_type,
-                url=HttpUrl(post_data.urls[0]) if post_data.urls else None,
+                url=HttpUrl(post_data.urls[0]),
                 caption=post_data.caption,
             )
         
@@ -217,8 +250,39 @@ async def create_post(request: Request, post_data: CreatePostRequest, _auth=Depe
             error_message=post.error_message,
         )
     
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to create post: {str(e)}")
+        error_msg = str(e)
+        
+        # Handle specific Instagram API errors
+        if "OAuthException" in error_msg or "Invalid parameter" in error_msg or "code: 100" in error_msg:
+            enhanced_msg = (
+                "Instagram API Error: Invalid parameter or OAuth issue.\n\n"
+                "Possible causes:\n"
+                "1) Access token expired or invalid\n"
+                "2) Missing required permissions (instagram_content_publish)\n"
+                "3) Account not connected properly\n"
+                "4) Media URL format issue\n\n"
+                f"Original error: {error_msg}\n\n"
+                "Solution: Regenerate your access token with correct permissions."
+            )
+            raise HTTPException(status_code=400, detail=enhanced_msg)
+        
+        if "too little or too many attachments" in error_msg or "carousel" in error_msg.lower():
+            enhanced_msg = (
+                "Instagram Carousel Error:\n\n"
+                "Carousel posts require 2-10 media items.\n"
+                "You selected 'Carousel' but:\n"
+                f"- Provided {len(post_data.urls) if 'post_data' in locals() else 'unknown'} item(s)\n\n"
+                "Solution:\n"
+                "- For 1 file: Select 'Image' or 'Video' instead of 'Carousel'\n"
+                "- For 2-10 files: Select 'Carousel' and upload 2-10 files\n"
+                f"\nOriginal error: {error_msg}"
+            )
+            raise HTTPException(status_code=400, detail=enhanced_msg)
+        
+        raise HTTPException(status_code=400, detail=f"Failed to create post: {error_msg}")
 
 
 @router.post("/posts/{post_id}/publish", response_model=PostResponse)
@@ -582,3 +646,267 @@ async def get_status(request: Request, _auth=Depends(check_auth), app: InstaForg
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get status: {str(e)}")
+
+
+# Comment-to-DM Automation endpoints
+@router.get("/comment-to-dm/status")
+async def get_comment_to_dm_status(
+    request: Request,
+    account_id: Optional[str] = None,
+    _auth=Depends(check_auth),
+    app: InstaForgeApp = Depends(get_app),
+):
+    """Get comment-to-DM automation status for an account"""
+    try:
+        if not app.comment_to_dm_service:
+            raise HTTPException(status_code=500, detail="Comment-to-DM service not initialized")
+        
+        # Get account ID (use first account if not specified)
+        if not account_id:
+            accounts = app.account_service.list_accounts()
+            if not accounts:
+                raise HTTPException(status_code=404, detail="No accounts configured")
+            account_id = accounts[0].account_id
+        
+        status_info = app.comment_to_dm_service.get_status(account_id)
+        
+        return {
+            "account_id": account_id,
+            "status": status_info,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get status: {str(e)}")
+
+
+@router.get("/comment-to-dm/config")
+async def get_comment_to_dm_config(
+    request: Request,
+    account_id: Optional[str] = None,
+    _auth=Depends(check_auth),
+    app: InstaForgeApp = Depends(get_app),
+):
+    """Get comment-to-DM configuration from accounts.yaml"""
+    try:
+        # Load accounts config
+        config_path = Path("config/accounts.yaml")
+        if not config_path.exists():
+            raise HTTPException(status_code=404, detail="Accounts config file not found")
+        
+        with open(config_path, "r") as f:
+            config = yaml.safe_load(f)
+        
+        accounts = config.get("accounts", [])
+        
+        # Find account
+        if not account_id:
+            if accounts:
+                account_id = accounts[0].get("account_id")
+            else:
+                raise HTTPException(status_code=404, detail="No accounts found")
+        
+        account = next((acc for acc in accounts if acc.get("account_id") == account_id), None)
+        if not account:
+            raise HTTPException(status_code=404, detail=f"Account {account_id} not found")
+        
+        comment_to_dm_config = account.get("comment_to_dm", {})
+        
+        return {
+            "account_id": account_id,
+            "config": comment_to_dm_config,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get config: {str(e)}")
+
+
+@router.put("/comment-to-dm/config")
+async def update_comment_to_dm_config(
+    request: Request,
+    account_id: Optional[str] = None,
+    _auth=Depends(check_auth),
+    app: InstaForgeApp = Depends(get_app),
+):
+    """Update comment-to-DM configuration in accounts.yaml"""
+    try:
+        body = await request.json()
+        
+        # Validate required fields
+        enabled = body.get("enabled", False)
+        trigger_keyword = body.get("trigger_keyword", "AUTO")
+        dm_message_template = body.get("dm_message_template", "")
+        link_to_send = body.get("link_to_send", "")
+        
+        # Load accounts config
+        config_path = Path("config/accounts.yaml")
+        if not config_path.exists():
+            raise HTTPException(status_code=404, detail="Accounts config file not found")
+        
+        with open(config_path, "r") as f:
+            config = yaml.safe_load(f)
+        
+        accounts = config.get("accounts", [])
+        
+        # Find account
+        if not account_id:
+            if accounts:
+                account_id = accounts[0].get("account_id")
+            else:
+                raise HTTPException(status_code=404, detail="No accounts found")
+        
+        account = next((acc for acc in accounts if acc.get("account_id") == account_id), None)
+        if not account:
+            raise HTTPException(status_code=404, detail=f"Account {account_id} not found")
+        
+        # Update comment_to_dm config
+        if "comment_to_dm" not in account:
+            account["comment_to_dm"] = {}
+        
+        account["comment_to_dm"].update({
+            "enabled": enabled,
+            "trigger_keyword": trigger_keyword or "AUTO",
+            "dm_message_template": dm_message_template or "",
+            "link_to_send": link_to_send or "",
+        })
+        
+        # Save config
+        with open(config_path, "w") as f:
+            yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+        
+        # Reload accounts in app
+        app.accounts = app.config_loader.load_accounts()
+        app.account_service = app.account_service.__class__(
+            accounts=app.accounts,
+            rate_limiter=app.rate_limiter,
+            proxy_manager=app.proxy_manager,
+        )
+        
+        return {
+            "status": "success",
+            "account_id": account_id,
+            "config": account["comment_to_dm"],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update config: {str(e)}")
+
+
+# Per-post comment-to-DM file management
+@router.post("/comment-to-dm/post/{media_id}/file")
+async def set_post_dm_file(
+    request: Request,
+    media_id: str,
+    account_id: Optional[str] = None,
+    _auth=Depends(check_auth),
+    app: InstaForgeApp = Depends(get_app),
+):
+    """Set file/link to send when someone comments on a specific post"""
+    try:
+        body = await request.json()
+        file_path = body.get("file_path")
+        file_url = body.get("file_url")
+        
+        if not app.comment_to_dm_service:
+            raise HTTPException(status_code=500, detail="Comment-to-DM service not initialized")
+        
+        # Get account ID (use first account if not specified)
+        if not account_id:
+            accounts = app.account_service.list_accounts()
+            if not accounts:
+                raise HTTPException(status_code=404, detail="No accounts configured")
+            account_id = accounts[0].account_id
+        
+        # Set post-specific file
+        app.comment_to_dm_service.post_dm_config.set_post_dm_file(
+            account_id=account_id,
+            media_id=media_id,
+            file_path=file_path,
+            file_url=file_url,
+        )
+        
+        return {
+            "status": "success",
+            "account_id": account_id,
+            "media_id": media_id,
+            "file_url": file_url or file_path,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to set post DM file: {str(e)}")
+
+
+@router.get("/comment-to-dm/post/{media_id}/file")
+async def get_post_dm_file(
+    request: Request,
+    media_id: str,
+    account_id: Optional[str] = None,
+    _auth=Depends(check_auth),
+    app: InstaForgeApp = Depends(get_app),
+):
+    """Get file/link configured for a specific post"""
+    try:
+        if not app.comment_to_dm_service:
+            raise HTTPException(status_code=500, detail="Comment-to-DM service not initialized")
+        
+        # Get account ID (use first account if not specified)
+        if not account_id:
+            accounts = app.account_service.list_accounts()
+            if not accounts:
+                raise HTTPException(status_code=404, detail="No accounts configured")
+            account_id = accounts[0].account_id
+        
+        file_url = app.comment_to_dm_service.post_dm_config.get_post_dm_file(
+            account_id=account_id,
+            media_id=media_id,
+        )
+        
+        return {
+            "account_id": account_id,
+            "media_id": media_id,
+            "file_url": file_url,
+            "has_file": file_url is not None,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get post DM file: {str(e)}")
+
+
+@router.delete("/comment-to-dm/post/{media_id}/file")
+async def remove_post_dm_file(
+    request: Request,
+    media_id: str,
+    account_id: Optional[str] = None,
+    _auth=Depends(check_auth),
+    app: InstaForgeApp = Depends(get_app),
+):
+    """Remove file configuration for a post"""
+    try:
+        if not app.comment_to_dm_service:
+            raise HTTPException(status_code=500, detail="Comment-to-DM service not initialized")
+        
+        # Get account ID (use first account if not specified)
+        if not account_id:
+            accounts = app.account_service.list_accounts()
+            if not accounts:
+                raise HTTPException(status_code=404, detail="No accounts configured")
+            account_id = accounts[0].account_id
+        
+        app.comment_to_dm_service.post_dm_config.remove_post_dm_file(
+            account_id=account_id,
+            media_id=media_id,
+        )
+        
+        return {
+            "status": "success",
+            "account_id": account_id,
+            "media_id": media_id,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to remove post DM file: {str(e)}")

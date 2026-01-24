@@ -45,21 +45,21 @@ if __name__ == "__main__":
     cloudinary_configured = is_cloudinary_configured()
     
     if cloudinary_configured:
-        print(f"✓ Cloudinary is configured - using Cloudinary for media uploads")
-        print(f"  Instagram will be able to access uploaded files via Cloudinary CDN.\n")
+        print(f"[OK] Cloudinary is configured - using Cloudinary for media uploads")
+        print(f"     Instagram will be able to access uploaded files via Cloudinary CDN.\n")
         cloudflare_url = None  # Don't start Cloudflare tunnel
     else:
         # Only start Cloudflare tunnel if Cloudinary is not configured
-        print(f"⚠ Cloudinary not configured - starting Cloudflare tunnel as fallback")
-        print(f"  For better reliability, configure Cloudinary (see CLOUDINARY_SETUP.md)\n")
+        print(f"[WARN] Cloudinary not configured - starting Cloudflare tunnel as fallback")
+        print(f"       For better reliability, configure Cloudinary (see CLOUDINARY_SETUP.md)\n")
         cloudflare_url = start_cloudflare(port)
         
         if cloudflare_url:
-            print(f"✓ Using Cloudflare HTTPS URL for media uploads: {cloudflare_url}")
-            print(f"  Instagram will be able to access uploaded files via this URL.\n")
+            print(f"[OK] Using Cloudflare HTTPS URL for media uploads: {cloudflare_url}")
+            print(f"     Instagram will be able to access uploaded files via this URL.\n")
         else:
-            print(f"⚠ Warning: Cloudflare tunnel not available. Uploaded files will use localhost URLs.")
-            print(f"  Instagram cannot access localhost URLs - configure Cloudinary or install cloudflared.\n")
+            print(f"[WARN] Warning: Cloudflare tunnel not available. Uploaded files will use localhost URLs.")
+            print(f"       Instagram cannot access localhost URLs - configure Cloudinary or install cloudflared.\n")
     
     try:
         uvicorn.run(

@@ -22,11 +22,13 @@ class WarmingService:
         schedule_time: str = "09:00",
         randomize_delay_minutes: int = 30,
         action_spacing_seconds: int = 60,
+        browser_wrapper=None,
     ):
         self.account_service = account_service
         self.schedule_time = schedule_time
         self.randomize_delay_minutes = randomize_delay_minutes
         self.action_spacing_seconds = action_spacing_seconds
+        self.browser_wrapper = browser_wrapper
     
     def _get_target_users(self, account_id: str, count: int = 10) -> List[str]:
         """
@@ -184,7 +186,12 @@ class WarmingService:
                 remaining_actions -= 1
             
             try:
-                action = create_warming_action(action_type, client)
+                action = create_warming_action(
+                    action_type,
+                    client,
+                    browser_wrapper=self.browser_wrapper,
+                    account=account,
+                )
                 
                 for _ in range(action_count):
                     try:
@@ -192,7 +199,18 @@ class WarmingService:
                         if action_type == "like":
                             targets = self._get_target_media(account_id, action_count)
                             target_id = random.choice(targets)
-                            result = action.execute(media_id=target_id)
+                            # Get post URL if available (from media info)
+                            post_url = None
+                            try:
+                                # Try to get permalink from media
+                                media_list = client.get_recent_media(limit=action_count * 2)
+                                for media in media_list:
+                                    if media.get("id") == target_id:
+                                        post_url = media.get("permalink")
+                                        break
+                            except Exception:
+                                pass
+                            result = action.execute(media_id=target_id, post_url=post_url)
                         
                         elif action_type == "comment":
                             targets = self._get_target_media(account_id, action_count)

@@ -30,13 +30,36 @@ class WarmingConfig(BaseModel):
     action_types: List[str] = Field(default_factory=lambda: ["like", "comment"])
 
 
+class CommentToDMConfig(BaseModel):
+    """
+    Comment-to-DM automation configuration (LinkDM/autodms.in style).
+    
+    Features:
+    - Tracks last processed comment ID per post
+    - Flexible trigger keyword (AUTO or specific keyword)
+    - One DM per user per post per day
+    - Configurable safety limits
+    """
+    enabled: bool = False
+    trigger_keyword: Optional[str] = "AUTO"  # "AUTO" for any comment, or specific keyword (case-insensitive)
+    dm_message_template: Optional[str] = None  # Template with {username}, {link}, {post} placeholders
+    link_to_send: Optional[str] = None  # Link to include in DM (PDF, checkout, etc.)
+    daily_dm_limit: Optional[int] = 50  # Maximum DMs per day per account
+    cooldown_seconds: Optional[int] = 5  # Minimum seconds between DMs
+    
+    class Config:
+        frozen = True
+
+
 class Account(BaseModel):
     """Instagram account model"""
     account_id: str
     username: str
     access_token: str
+    password: Optional[str] = None  # For browser automation login
     proxy: ProxyConfig = Field(default_factory=ProxyConfig)
     warming: WarmingConfig = Field(default_factory=WarmingConfig)
+    comment_to_dm: Optional[CommentToDMConfig] = None  # Comment-to-DM automation config
     
     class Config:
         frozen = True  # Immutable for thread safety

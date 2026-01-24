@@ -191,6 +191,11 @@ async def startup_event():
         instaforge_app = InstaForgeApp()
         instaforge_app.initialize()
         
+        # Start comment monitoring for all accounts
+        print("Starting comment automation...")
+        instaforge_app.comment_monitor.start_monitoring_all_accounts()
+        print("Comment automation started - monitoring posts for new comments")
+        
         # Set app instance for API routes
         from .api import set_app_instance
         set_app_instance(instaforge_app)
@@ -203,6 +208,9 @@ async def shutdown_event():
     """Cleanup on shutdown"""
     global instaforge_app
     if instaforge_app:
+        # Stop comment monitoring
+        if instaforge_app.comment_monitor:
+            instaforge_app.comment_monitor.stop_monitoring_all_accounts()
         instaforge_app.shutdown()
 
 

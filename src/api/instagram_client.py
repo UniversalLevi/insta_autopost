@@ -31,7 +31,8 @@ class InstagramClient:
         api_version: str = "v18.0",
         rate_limiter: Optional[RateLimiter] = None,
         proxy_url: Optional[str] = None,
-        connection_timeout: int = 10,
+        connection_timeout: int = 60,
+        read_timeout: int = 120,
     ):
         self.access_token = access_token
         self.api_base_url = api_base_url
@@ -39,6 +40,9 @@ class InstagramClient:
         self.rate_limiter = rate_limiter or RateLimiter()
         self.proxy_url = proxy_url
         self.connection_timeout = connection_timeout
+        self.read_timeout = read_timeout
+        # Use tuple timeout: (connect_timeout, read_timeout)
+        self.timeout = (connection_timeout, read_timeout)
         
         self.base_url = f"{api_base_url}/{api_version}"
         self.session = requests.Session()
@@ -87,12 +91,17 @@ class InstagramClient:
         params["access_token"] = self.access_token
         
         try:
-            logger.debug(
+            logger.info(
                 "Making Instagram API request",
                 method=method,
                 endpoint=endpoint,
+                timeout=self.timeout,
                 has_proxy=bool(self.proxy_url),
             )
+            
+            # Use tuple timeout for better control (connect, read)
+            # Instagram API can be slow, especially for media container creation
+            timeout_value = self.timeout
             
             response = self.session.request(
                 method=method,
@@ -101,7 +110,14 @@ class InstagramClient:
                 json=data if not files else None,
                 data=data if files else None,
                 files=files,
-                timeout=self.connection_timeout,
+                timeout=timeout_value,
+            )
+            
+            logger.info(
+                "Received response from Instagram API",
+                method=method,
+                endpoint=endpoint,
+                status_code=response.status_code,
             )
             
             # Handle rate limiting
@@ -157,10 +173,22 @@ class InstagramClient:
             return result
         
         except requests.exceptions.ProxyError as e:
+            logger.error("Proxy connection failed", error=str(e), endpoint=endpoint)
             raise ProxyError(f"Proxy connection failed: {str(e)}")
         except requests.exceptions.Timeout as e:
-            raise InstagramAPIError(f"Request timeout: {str(e)}")
+            logger.error(
+                "Request timeout",
+                error=str(e),
+                endpoint=endpoint,
+                timeout=self.timeout,
+            )
+            raise InstagramAPIError(
+                f"Request timeout after {self.timeout} seconds. "
+                f"This usually means Instagram's API is slow or the media URL is taking too long to process. "
+                f"Try again or check your media URL. Error: {str(e)}"
+            )
         except requests.exceptions.RequestException as e:
+            logger.error("Request failed", error=str(e), endpoint=endpoint)
             raise InstagramAPIError(f"Request failed: {str(e)}")
     
     @retry(
@@ -230,17 +258,39 @@ class InstagramClient:
             params["user_tags"] = ",".join(user_tags)
         
         # Log the exact request being sent
-        logger.debug(
+        logger.info(
             "Sending media container creation request to Instagram",
             endpoint="me/media",
             has_image_url=bool(image_url),
             has_video_url=bool(video_url),
             params_keys=list(params.keys()),
+            timeout=self.timeout,
         )
         
         try:
+            logger.info(
+                "Calling Instagram API to create media container",
+                endpoint="me/media",
+                has_image=bool(image_url),
+                has_video=bool(video_url),
+            )
             response = self._make_request("POST", "me/media", data=params)
+            
+            logger.info(
+                "Received response from Instagram API",
+                has_id="id" in response,
+                response_keys=list(response.keys()) if isinstance(response, dict) else None,
+            )
+            
             container_id = response.get("id")
+            
+            if not container_id:
+                logger.error(
+                    "Instagram API returned response without container ID",
+                    response=response,
+                )
+                raise InstagramAPIError("Instagram API did not return a container ID")
+            
             logger.info(
                 "Media container created successfully",
                 container_id=container_id,
@@ -258,6 +308,7 @@ class InstagramClient:
                 error_code=error_code,
                 error_subcode=error_subcode,
                 media_url=media_url,
+                error_type=type(e).__name__,
             )
             
             # If error 9004, provide more helpful error message
@@ -275,6 +326,18 @@ class InstagramClient:
                     error_subcode=error_subcode,
                 )
             raise
+        except Exception as e:
+            # Catch any other unexpected exceptions
+            logger.error(
+                "Unexpected error while creating media container",
+                error=str(e),
+                error_type=type(e).__name__,
+                media_url=media_url,
+                exc_info=True,
+            )
+            raise InstagramAPIError(
+                f"Unexpected error creating media container: {str(e)}"
+            ) from e
     
     def _verify_media_url(self, url: str) -> bool:
         """
@@ -452,13 +515,25 @@ class InstagramClient:
         Create a carousel media container
         
         Args:
-            children: List of child media container IDs
+            children: List of child media container IDs (must be 2-10)
             caption: Post caption
             location_id: Optional location ID
             
         Returns:
             Container ID for publishing
         """
+        # Instagram requires 2-10 items for carousel
+        if len(children) < 2:
+            raise InstagramAPIError(
+                f"Carousel posts require 2-10 items. You provided {len(children)}.",
+                error_code=100,
+            )
+        if len(children) > 10:
+            raise InstagramAPIError(
+                f"Carousel posts can have maximum 10 items. You provided {len(children)}.",
+                error_code=100,
+            )
+        
         params = {
             "media_type": "CAROUSEL",
             "children": ",".join(children),
@@ -467,6 +542,12 @@ class InstagramClient:
         
         if location_id:
             params["location_id"] = location_id
+        
+        logger.info(
+            "Creating carousel container",
+            child_count=len(children),
+            children=children[:3],  # Log first 3 IDs
+        )
         
         response = self._make_request("POST", "me/media", data=params)
         return response["id"]
@@ -576,3 +657,90 @@ class InstagramClient:
             return response["data"]
         
         return []
+    
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type((InstagramAPIError, RateLimitError)),
+    )
+    def send_direct_message(
+        self,
+        recipient_username: str,
+        message: str,
+        recipient_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Send a direct message to a user via Instagram Graph API.
+        
+        Note: Instagram Graph API DM limitations:
+        - Requires instagram_manage_messages permission
+        - Can only send to users who have messaged you first (or via thread)
+        - May require Business/Creator account with messaging enabled
+        
+        Args:
+            recipient_username: Username of recipient (for identification)
+            message: Message text to send
+            recipient_id: Optional Instagram user ID (more reliable than username)
+            
+        Returns:
+            Result dictionary with status and dm_id
+        """
+        try:
+            # Instagram Graph API DM endpoint
+            # First, we need to get or create a conversation thread
+            # For now, we'll try the direct message endpoint
+            
+            # Method 1: Try sending via conversations API (if thread exists)
+            # Method 2: Try sending via message_creatives API
+            
+            # Note: Instagram's DM API is complex and has restrictions
+            # This is a simplified implementation that attempts to send DMs
+            
+            # Get account ID (IGSID)
+            account_info = self.get_account_info()
+            account_id = account_info.get("id")
+            
+            # Try to send via conversations API
+            # This requires the user to have previously messaged you
+            endpoint = f"{account_id}/messages"
+            
+            response = self._make_request(
+                "POST",
+                endpoint,
+                data={
+                    "recipient": {"username": recipient_username} if recipient_username else {"id": recipient_id},
+                    "message": {"text": message},
+                }
+            )
+            
+            logger.info(
+                "DM sent via Instagram Graph API",
+                recipient_username=recipient_username,
+                message_length=len(message),
+            )
+            
+            return {
+                "status": "success",
+                "dm_id": response.get("id") or response.get("message_id"),
+                "recipient": recipient_username,
+            }
+            
+        except InstagramAPIError as e:
+            error_code = getattr(e, 'error_code', None)
+            
+            # Common error codes for DM failures
+            if error_code in [100, 200, 10]:
+                # Permissions or business messaging not enabled
+                logger.warning(
+                    "DM failed - may require messaging permissions or user to message first",
+                    recipient_username=recipient_username,
+                    error_code=error_code,
+                    error=str(e),
+                )
+            
+            return {
+                "status": "failed",
+                "error": str(e),
+                "error_code": error_code,
+                "recipient": recipient_username,
+            }

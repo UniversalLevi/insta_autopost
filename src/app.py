@@ -11,6 +11,9 @@ from .services.account_service import AccountService
 from .services.posting_service import PostingService
 from .proxies.proxy_manager import ProxyManager
 from .warming.warming_service import WarmingService
+from .features.comments.comment_service import CommentService
+from .features.comments.comment_monitor import CommentMonitor
+from .features.comments.comment_to_dm_service import CommentToDMService
 
 logger = get_logger(__name__)
 
@@ -28,6 +31,9 @@ class InstaForgeApp:
         self.account_service = None
         self.posting_service = None
         self.warming_service = None
+        self.comment_service = None
+        self.comment_monitor = None
+        self.comment_to_dm_service = None
     
     def initialize(self):
         """Initialize the application"""
@@ -84,12 +90,49 @@ class InstaForgeApp:
             retry_delay_seconds=self.config.instagram.posting["retry_delay_seconds"],
         )
         
+        # Initialize browser automation (optional, for like/follow actions)
+        try:
+            from .automation.browser.browser_wrapper import BrowserWrapper
+            self.browser_wrapper = BrowserWrapper(headless=True)
+            logger.info("Browser automation initialized")
+        except ImportError as e:
+            logger.warning(
+                "Browser automation not available (Playwright not installed). "
+                "Like/follow actions will be simulated. "
+                "Install with: pip install playwright && playwright install chromium",
+                error=str(e),
+            )
+            self.browser_wrapper = None
+        except Exception as e:
+            logger.warning("Failed to initialize browser automation", error=str(e))
+            self.browser_wrapper = None
+        
         # Initialize warming service
         self.warming_service = WarmingService(
             account_service=self.account_service,
             schedule_time=self.config.warming.schedule_time,
             randomize_delay_minutes=self.config.warming.randomize_delay_minutes,
             action_spacing_seconds=self.config.warming.action_spacing_seconds,
+            browser_wrapper=self.browser_wrapper,
+        )
+        
+        # Initialize comment automation
+        self.comment_service = CommentService(
+            account_service=self.account_service,
+            auto_reply_enabled=True,
+        )
+        
+        # Initialize comment-to-DM automation service
+        self.comment_to_dm_service = CommentToDMService(
+            account_service=self.account_service,
+        )
+        
+        self.comment_monitor = CommentMonitor(
+            account_service=self.account_service,
+            comment_service=self.comment_service,
+            comment_to_dm_service=self.comment_to_dm_service,
+            check_interval_seconds=60,  # Check every minute
+            monitor_recent_posts=5,  # Monitor last 5 posts
         )
         
         logger.info("Application initialized successfully")
@@ -146,6 +189,18 @@ class InstaForgeApp:
     def shutdown(self):
         """Gracefully shutdown the application"""
         logger.info("Shutting down InstaForge application")
+        
+        # Stop comment monitoring
+        if self.comment_monitor:
+            self.comment_monitor.stop_monitoring_all_accounts()
+        
+        # Close browser automation
+        if hasattr(self, 'browser_wrapper') and self.browser_wrapper:
+            try:
+                self.browser_wrapper.close_all()
+            except Exception as e:
+                logger.warning("Error closing browser automation", error=str(e))
+        
         # Cleanup logic here if needed
 
 
@@ -161,6 +216,10 @@ def main():
         
         # Schedule warming actions
         app.schedule_warming()
+        
+        # Start comment monitoring for all accounts
+        logger.info("Starting comment monitoring for all accounts")
+        app.comment_monitor.start_monitoring_all_accounts()
         
         # Run scheduler
         logger.info("Application ready, starting scheduler")

@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel
 
 from .exceptions import ConfigError
-from ..models.account import Account, ProxyConfig, WarmingConfig
+from ..models.account import Account, ProxyConfig, WarmingConfig, CommentToDMConfig
 
 
 class AppSettings(BaseModel):
@@ -128,9 +128,10 @@ class ConfigLoader:
         accounts = []
         
         for raw_acc_data in raw_accounts_list:
-            # Extract proxy and warming before substitution
+            # Extract proxy, warming, and comment_to_dm before substitution
             proxy_data = raw_acc_data.pop("proxy", {})
             warming_data = raw_acc_data.pop("warming", {})
+            comment_to_dm_data = raw_acc_data.pop("comment_to_dm", None)
             
             # Substitute env vars for non-proxy fields
             acc_data = self._substitute_env_vars(raw_acc_data)
@@ -145,10 +146,17 @@ class ConfigLoader:
             # Substitute env vars for warming
             warming_data = self._substitute_env_vars(warming_data)
             
+            # Handle comment_to_dm configuration
+            comment_to_dm_config = None
+            if comment_to_dm_data:
+                comment_to_dm_data = self._substitute_env_vars(comment_to_dm_data)
+                comment_to_dm_config = CommentToDMConfig(**comment_to_dm_data)
+            
             account = Account(
                 **acc_data,
                 proxy=ProxyConfig(**proxy_data),
                 warming=WarmingConfig(**warming_data),
+                comment_to_dm=comment_to_dm_config,
             )
             accounts.append(account)
         

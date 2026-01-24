@@ -62,14 +62,29 @@ class PostingService:
             if not media.children:
                 raise PostingError("Carousel posts require child media")
             
+            # Instagram requires 2-10 items for carousel
+            if len(media.children) < 2:
+                raise PostingError(f"Carousel posts require 2-10 media items. You provided {len(media.children)}.")
+            if len(media.children) > 10:
+                raise PostingError(f"Carousel posts can have maximum 10 items. You provided {len(media.children)}.")
+            
             # Create containers for each child
             child_ids = []
-            for child in media.children:
+            for idx, child in enumerate(media.children, 1):
+                logger.info(
+                    f"Creating carousel child {idx}/{len(media.children)}",
+                    child_type=child.media_type,
+                    has_url=bool(child.url),
+                )
                 child_id = self._upload_media_to_instagram(client, child)
                 child_ids.append(child_id)
+                # Small delay between child creations
+                if idx < len(media.children):
+                    time.sleep(1)
             
-            # Wait for children to be ready
-            time.sleep(2)
+            # Wait for children to be ready before creating carousel
+            logger.info("Waiting for carousel children to be ready", child_count=len(child_ids))
+            time.sleep(3)
             
             return client.create_carousel_container(
                 children=child_ids,

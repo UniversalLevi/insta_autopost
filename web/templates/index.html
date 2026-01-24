@@ -27,7 +27,7 @@
         </div>
 
         <div class="post-form-container">
-            <form id="postForm" class="post-form">
+            <form id="postForm" class="post-form" novalidate>
                 <!-- Media Type Selection -->
                 <div class="form-section">
                     <label class="form-label">Media Type</label>
@@ -118,6 +118,43 @@
                     <label for="hashtags" class="form-label">Hashtags</label>
                     <input type="text" id="hashtags" name="hashtags" class="form-input" placeholder="comma, separated, hashtags">
                     <small class="form-help">Enter hashtags separated by commas (without #)</small>
+                </div>
+
+                <!-- Auto-DM File Attachment -->
+                <div class="form-section" style="border-top: 2px solid #E5E7EB; padding-top: 1.5rem; margin-top: 1rem;">
+                    <label class="form-label">Auto-DM File (Optional)</label>
+                    <p style="font-size: 0.875rem; color: #6B7280; margin-bottom: 1rem;">
+                        Attach a PDF or link that will be automatically sent via DM when someone comments on this post.
+                    </p>
+                    
+                    <div style="display: flex; gap: 0.75rem; margin-bottom: 0.5rem;">
+                        <label class="radio-label" style="flex: 1;">
+                            <input type="radio" name="dm_file_type" value="upload" id="dmFileUploadRadio">
+                            <span>Upload PDF</span>
+                        </label>
+                        <label class="radio-label" style="flex: 1;">
+                            <input type="radio" name="dm_file_type" value="url" id="dmFileUrlRadio" checked>
+                            <span>Use File Path/URL</span>
+                        </label>
+                    </div>
+                    
+                    <!-- PDF Upload Option -->
+                    <div id="dmFileUploadSection" style="display: none;">
+                        <input type="file" id="dmFileInput" accept=".pdf,application/pdf" style="display: none;">
+                        <button type="button" class="btn btn-secondary" onclick="document.getElementById('dmFileInput').click()" style="width: 100%;">
+                            Choose PDF File
+                        </button>
+                        <div id="dmFilePreview" style="margin-top: 0.5rem; padding: 0.75rem; background: #F3F4F6; border-radius: 6px; display: none;">
+                            <span id="dmFileName" style="font-weight: 500;"></span>
+                            <button type="button" onclick="clearDmFile()" style="margin-left: 0.5rem; color: #EF4444; background: none; border: none; cursor: pointer;">Remove</button>
+                        </div>
+                    </div>
+                    
+                    <!-- File Path/URL Option -->
+                    <div id="dmFileUrlSection">
+                        <input type="text" id="dm_file_path" name="dm_file_path" class="form-input" placeholder="C:/Users/kanis/Downloads/file.pdf or https://example.com/file.pdf">
+                        <small class="form-help">Enter local file path (e.g., C:/Users/kanis/Downloads/2508843519.pdf) or web URL</small>
+                    </div>
                 </div>
 
                 <!-- Post Options -->

@@ -3,7 +3,10 @@
 import time
 import random
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..models.account import Account
 
 from ..utils.logger import get_logger
 from ..api.instagram_client import InstagramClient
@@ -34,18 +37,31 @@ class WarmingAction(ABC):
 
 
 class LikeAction(WarmingAction):
-    """Like a post
+    """Like a post using browser automation
     
-    Note: Instagram Graph API does not support liking posts directly for Business accounts.
-    This action logs the attempt but does not perform actual API calls.
+    Falls back to simulated if browser automation is not available or fails.
     """
     
-    def execute(self, media_id: str, **kwargs) -> Dict[str, Any]:
+    def __init__(self, client, browser_wrapper=None, account=None):
         """
-        Like a post
+        Initialize like action
+        
+        Args:
+            client: Instagram API client
+            browser_wrapper: Optional browser automation wrapper
+            account: Optional account model (for username/password)
+        """
+        super().__init__(client)
+        self.browser_wrapper = browser_wrapper
+        self.account = account
+    
+    def execute(self, media_id: str, post_url: Optional[str] = None, **kwargs) -> Dict[str, Any]:
+        """
+        Like a post using browser automation
         
         Args:
             media_id: Instagram media ID to like
+            post_url: Optional post URL (if not provided, will try to get from media_id)
             
         Returns:
             Action result
@@ -53,13 +69,75 @@ class LikeAction(WarmingAction):
         logger.info(
             "Warming action: Like",
             media_id=media_id,
+            has_browser_wrapper=bool(self.browser_wrapper),
         )
         
-        # Note: Instagram Graph API doesn't support liking posts for Business accounts
-        # This is a limitation of the API. We log the action for tracking purposes.
-        # In a real implementation, you might need Instagram Basic Display API or other methods.
+        # Try browser automation if available
+        if self.browser_wrapper and self.account:
+            try:
+                # Get post URL if not provided
+                if not post_url:
+                    # Try to get permalink from media info
+                    try:
+                        # Get media info to extract permalink
+                        media_info = self.client._make_request(
+                            "GET",
+                            media_id,
+                            params={"fields": "permalink"}
+                        )
+                        post_url = media_info.get("permalink")
+                    except Exception as e:
+                        logger.debug("Could not get permalink from API", error=str(e))
+                        # Fallback: construct URL from media ID (may not work)
+                        # Instagram URLs format: https://www.instagram.com/p/{shortcode}/
+                        post_url = None
+                
+                if post_url:
+                    # Use browser automation to like
+                    result = self.browser_wrapper.like_post_sync(
+                        account_id=self.account.account_id,
+                        post_url=post_url,
+                        username=self.account.username,
+                        password=getattr(self.account, 'password', None),
+                        proxy_url=self.account.proxy.proxy_url if self.account.proxy.enabled else None,
+                    )
+                    
+                    if result.get("status") in ["completed", "already_liked"]:
+                        logger.info(
+                            "Post liked successfully via browser",
+                            media_id=media_id,
+                            post_url=post_url,
+                            status=result.get("status"),
+                        )
+                        return {
+                            "action": "like",
+                            "media_id": media_id,
+                            "post_url": post_url,
+                            "status": result.get("status"),
+                            "method": "browser",
+                            "timestamp": time.time(),
+                        }
+                    else:
+                        logger.warning(
+                            "Browser like failed, falling back to simulated",
+                            media_id=media_id,
+                            error=result.get("error"),
+                        )
+                else:
+                    logger.warning(
+                        "Could not get post URL, falling back to simulated",
+                        media_id=media_id,
+                    )
+            except Exception as e:
+                logger.warning(
+                    "Browser automation error, falling back to simulated",
+                    media_id=media_id,
+                    error=str(e),
+                )
+        
+        # Fallback: Simulated (if browser automation not available or failed)
         logger.warning(
-            "Like action not supported via Instagram Graph API for Business accounts",
+            "Like action using simulated mode (browser automation not available or failed)",
             media_id=media_id,
         )
         
@@ -70,7 +148,7 @@ class LikeAction(WarmingAction):
             "action": "like",
             "media_id": media_id,
             "status": "simulated",
-            "note": "Instagram Graph API doesn't support liking for Business accounts",
+            "note": "Browser automation not available or failed",
             "timestamp": time.time(),
         }
     

@@ -1,14 +1,22 @@
 accounts:
   - account_id: "1405915827600672"
     username: "mr_tony.87"
-    access_token: "IGAATZBrEl8ZCSBBZAGI1eGNZAME5CeWdQcVVSOXFtWkRJNnNMdVlNWEZAPSmZA3b2J3TlkxbVNMZAFRBQ0tpRkQ3cXcwbDM5ZAXNXSi0waGlDS3c0UDJVaS1HRzJQNFB2cHdtZAXBwQzA4bVZAfMnM3bE5kbE5lNm8ybXlRY3hRdXMyY2hSZAwZDZD"
+    # Latest token provided by user
+    access_token: "IGAATZBrEl8ZCSBBZAFpCVmJpQm1DWGQteXl0OFhZAZAWhZAaXR2ckZA0el8tMTRPdkg0X0lvTWNXRzluTmZAlLVJQN1l3SmRqbVpOem94aEdiZAkdFUGdfUmY0dkN2V205alZAma2dQcUFLTFZAqM2w0a3llU3VNblZAwVW9RVmNwcWFnVEJ1WQZDZD"
+    password: "12345678@"
     proxy:
       enabled: false
     warming:
-      enabled: true
+      enabled: false
       daily_actions: 10
       action_types:
         - "like"
         - "comment"
         - "follow"
         - "story_view"
+    # Comment-to-DM Automation (Disabled to focus on posting)
+    comment_to_dm:
+      enabled: false
+      trigger_keyword: "AUTO"
+      dm_message_template: "Hey {username} 👋 Thanks for commenting! Here's the link you requested: {link}"
+      link_to_send: "file:///C:/Users/kanis/Downloads/2508843519.pdf"
