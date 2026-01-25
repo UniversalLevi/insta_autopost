@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadAccounts();
     setupFileUpload();
     setupCaptionCounters();
+    toggleAutoDM();  // Show/hide Auto-DM settings based on default (checked)
 });
 
 // Accounts
@@ -36,6 +37,16 @@ async function loadAccounts() {
 
 function updateSelectedAccounts() {
     selectedAccounts = Array.from(document.querySelectorAll('input[name="account"]:checked')).map(cb => cb.value);
+}
+
+function togglePostByUrl() {
+    const useUrl = document.getElementById('post-by-url-toggle').checked;
+    document.getElementById('post-by-url-section').classList.toggle('hidden', !useUrl);
+    document.getElementById('upload-section').classList.toggle('hidden', useUrl);
+    if (useUrl) {
+        uploadedFiles = [];
+        updateFileList();
+    }
 }
 
 // Media Type
@@ -157,38 +168,63 @@ async function submitPost() {
         return;
     }
 
-    if (uploadedFiles.length === 0) {
-        alert('Please upload media');
-        return;
-    }
-
     const mediaType = document.getElementById('media-type').value;
-    if (mediaType === 'carousel' && uploadedFiles.length < 2) {
-        alert('Carousel requires at least 2 files');
-        return;
-    }
-    if (mediaType !== 'carousel' && uploadedFiles.length > 1) {
-        alert(`Single ${mediaType} post can only have 1 file. Use Carousel for multiple.`);
-        return;
+    const postByUrl = document.getElementById('post-by-url-toggle').checked;
+    let urls = [];
+
+    if (postByUrl) {
+        const raw = (document.getElementById('media-urls').value || '').trim();
+        urls = raw.split(/\n/).map(s => s.trim()).filter(Boolean);
+        if (urls.length === 0) {
+            alert('Enter at least one public HTTPS media URL (one per line).');
+            return;
+        }
+        for (const u of urls) {
+            if (!u.startsWith('https://')) {
+                alert('All URLs must be HTTPS. Use Cloudinary, Imgur, S3, etc.');
+                return;
+            }
+            if (/localhost|127\.0\.0\.1|trycloudflare\.com/i.test(u)) {
+                alert('Avoid localhost and Cloudflare tunnel URLs. Use a static host (Cloudinary, Imgur, S3).');
+                return;
+            }
+        }
+        if (mediaType === 'carousel' && urls.length < 2) {
+            alert('Carousel requires at least 2 URLs.');
+            return;
+        }
+        if (mediaType !== 'carousel' && urls.length > 1) {
+            alert(`Single ${mediaType} post can only have 1 URL. Use Carousel for multiple.`);
+            return;
+        }
+    } else {
+        if (uploadedFiles.length === 0) {
+            alert('Please upload media or enable "Post by URL" and add URLs.');
+            return;
+        }
+        if (mediaType === 'carousel' && uploadedFiles.length < 2) {
+            alert('Carousel requires at least 2 files');
+            return;
+        }
+        if (mediaType !== 'carousel' && uploadedFiles.length > 1) {
+            alert(`Single ${mediaType} post can only have 1 file. Use Carousel for multiple.`);
+            return;
+        }
     }
 
     const btn = document.getElementById('submit-btn');
     btn.disabled = true;
-    btn.textContent = 'Uploading media...';
+    btn.textContent = postByUrl ? 'Posting...' : 'Uploading media...';
 
     try {
-        // 1. Upload files
-        const formData = new FormData();
-        uploadedFiles.forEach(f => formData.append('files', f));
-        
-        const uploadRes = await fetch('/api/upload', {
-            method: 'POST',
-            body: formData
-        });
-        
-        if (!uploadRes.ok) throw new Error('Upload failed');
-        const uploadData = await uploadRes.json();
-        const urls = uploadData.urls.map(u => u.url);
+        if (!postByUrl) {
+            const formData = new FormData();
+            uploadedFiles.forEach(f => formData.append('files', f));
+            const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
+            if (!uploadRes.ok) throw new Error('Upload failed');
+            const uploadData = await uploadRes.json();
+            urls = uploadData.urls.map(u => u.url);
+        }
 
         // 2. Prepare Post Data
         const caption = document.getElementById('caption').value;
@@ -204,6 +240,8 @@ async function submitPost() {
         let successCount = 0;
         let errors = [];
 
+        const POST_TIMEOUT_MS = 180000;
+
         for (const accountId of selectedAccounts) {
             try {
                 const postData = {
@@ -214,11 +252,25 @@ async function submitPost() {
                     scheduled_time: scheduledTime || null
                 };
 
-                const postRes = await fetch('/api/posts/create', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(postData)
-                });
+                const ac = new AbortController();
+                const timeoutId = setTimeout(() => ac.abort(), POST_TIMEOUT_MS);
+
+                let postRes;
+                try {
+                    postRes = await fetch('/api/posts/create', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(postData),
+                        signal: ac.signal
+                    });
+                } catch (fetchErr) {
+                    clearTimeout(timeoutId);
+                    if (fetchErr.name === 'AbortError') {
+                        throw new Error('Post is taking longer than usual. Instagram may still be processing. Check History or try again.');
+                    }
+                    throw fetchErr;
+                }
+                clearTimeout(timeoutId);
 
                 if (!postRes.ok) {
                     const err = await postRes.json();
@@ -256,12 +308,13 @@ async function submitPost() {
         alert(msg);
         
         if (successCount === selectedAccounts.length) {
-            // Reset form
             uploadedFiles = [];
             updateFileList();
             document.getElementById('caption').value = '';
             document.getElementById('scheduled-time').value = '';
-            // Don't clear accounts/auto-dm just in case they want to reuse
+            if (document.getElementById('post-by-url-toggle').checked) {
+                document.getElementById('media-urls').value = '';
+            }
         }
 
     } catch (error) {

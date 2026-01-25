@@ -422,6 +422,32 @@ async def verify_url(url: str):
     except Exception as e:
         return {"url": url, "error": str(e), "is_valid": False}
 
+
+@router.get("/webhooks/callback-url")
+async def get_webhook_callback_url():
+    """
+    Return the Instagram webhook callback URL for Meta app configuration.
+    Use the Cloudflare tunnel URL when available (development/testing).
+    IMPORTANT: In Meta, set Callback URL to the value of callback_url below.
+    Do NOT use this /api/webhooks/callback-url endpoint as the Callback URL.
+    """
+    from .cloudflare_helper import get_cloudflare_url
+    verify_token = os.environ.get("WEBHOOK_VERIFY_TOKEN", "my_test_token_for_instagram_verification")
+    base = get_cloudflare_url()
+    if base:
+        callback_url = f"{base.rstrip('/')}/webhooks/instagram"
+        return {
+            "callback_url": callback_url,
+            "verify_token": verify_token,
+            "note": "In Meta app: Callback URL = callback_url above; Verify token = verify_token above. Do NOT use /api/webhooks/callback-url as Callback URL.",
+        }
+    return {
+        "callback_url": None,
+        "verify_token": verify_token,
+        "note": "Start the app to create a Cloudflare tunnel, then GET this again for callback_url.",
+    }
+
+
 # --- Comment-to-DM Endpoints ---
 
 @router.get("/comment-to-dm/status")

@@ -61,11 +61,17 @@ class InstaForgeApp:
             account_count=len(self.accounts),
         )
         
-        # Initialize rate limiter
+        # Initialize rate limiters: shared for monitor, dedicated for posting (avoids starvation)
+        rl = self.config.instagram.rate_limit
         self.rate_limiter = RateLimiter(
-            requests_per_hour=self.config.instagram.rate_limit["requests_per_hour"],
-            requests_per_minute=self.config.instagram.rate_limit["requests_per_minute"],
-            retry_after_seconds=self.config.instagram.rate_limit["retry_after_seconds"],
+            requests_per_hour=rl["requests_per_hour"],
+            requests_per_minute=rl["requests_per_minute"],
+            retry_after_seconds=rl["retry_after_seconds"],
+        )
+        self.rate_limiter_posting = RateLimiter(
+            requests_per_hour=rl["requests_per_hour"],
+            requests_per_minute=min(10, rl["requests_per_minute"]),
+            retry_after_seconds=rl["retry_after_seconds"],
         )
         
         # Initialize proxy manager
@@ -78,10 +84,14 @@ class InstaForgeApp:
         )
         
         # Initialize account service
+        posting = self.config.instagram.posting
         self.account_service = AccountService(
             accounts=self.accounts,
             rate_limiter=self.rate_limiter,
+            rate_limiter_posting=self.rate_limiter_posting,
             proxy_manager=self.proxy_manager,
+            image_upload_timeout=posting.get("image_upload_timeout", 90),
+            video_upload_timeout=posting.get("video_upload_timeout", 180),
         )
         
         # Initialize posting service
@@ -136,7 +146,7 @@ class InstaForgeApp:
             comment_service=self.comment_service,
             comment_to_dm_service=self.comment_to_dm_service,
             check_interval_seconds=60,  # Check every minute
-            monitor_recent_posts=5,  # Monitor last 5 posts
+            monitor_recent_posts=3,  # Fewer posts to leave headroom for posting
         )
         
         logger.info("Application initialized successfully")

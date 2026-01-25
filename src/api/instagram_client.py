@@ -33,6 +33,8 @@ class InstagramClient:
         proxy_url: Optional[str] = None,
         connection_timeout: int = 60,
         read_timeout: int = 120,
+        image_upload_timeout: int = 90,
+        video_upload_timeout: int = 180,
     ):
         self.access_token = access_token
         self.api_base_url = api_base_url
@@ -41,6 +43,8 @@ class InstagramClient:
         self.proxy_url = proxy_url
         self.connection_timeout = connection_timeout
         self.read_timeout = read_timeout
+        self.image_upload_timeout = image_upload_timeout
+        self.video_upload_timeout = video_upload_timeout
         # Use tuple timeout: (connect_timeout, read_timeout)
         self.timeout = (connection_timeout, read_timeout)
         
@@ -61,6 +65,7 @@ class InstagramClient:
         params: Optional[Dict[str, Any]] = None,
         data: Optional[Dict[str, Any]] = None,
         files: Optional[Dict[str, Any]] = None,
+        timeout_override: Optional[tuple] = None,
     ) -> Dict[str, Any]:
         """
         Make an HTTP request to Instagram API
@@ -71,6 +76,7 @@ class InstagramClient:
             params: Query parameters
             data: Request body data
             files: Files to upload
+            timeout_override: Optional (connect, read) timeout for this request
             
         Returns:
             API response as dictionary
@@ -90,19 +96,21 @@ class InstagramClient:
             params = {}
         params["access_token"] = self.access_token
         
+        timeout_value = timeout_override if timeout_override is not None else self.timeout
+        
         try:
             logger.info(
                 "Making Instagram API request",
                 method=method,
                 endpoint=endpoint,
-                timeout=self.timeout,
+                timeout=timeout_value,
                 has_proxy=bool(self.proxy_url),
             )
-            
-            # Use tuple timeout for better control (connect, read)
-            # Instagram API can be slow, especially for media container creation
-            timeout_value = self.timeout
-            
+            logger.debug(
+                "Sending request to Instagram",
+                endpoint=endpoint,
+                timeout=timeout_value,
+            )
             response = self.session.request(
                 method=method,
                 url=url,
@@ -180,10 +188,10 @@ class InstagramClient:
                 "Request timeout",
                 error=str(e),
                 endpoint=endpoint,
-                timeout=self.timeout,
+                timeout=timeout_value,
             )
             raise InstagramAPIError(
-                f"Request timeout after {self.timeout} seconds. "
+                f"Request timeout after {timeout_value} seconds. "
                 f"This usually means Instagram's API is slow or the media URL is taking too long to process. "
                 f"Try again or check your media URL. Error: {str(e)}"
             )
@@ -257,14 +265,18 @@ class InstagramClient:
         if user_tags:
             params["user_tags"] = ",".join(user_tags)
         
-        # Log the exact request being sent
+        media_timeout = (
+            (self.connection_timeout, self.video_upload_timeout)
+            if video_url
+            else (self.connection_timeout, self.image_upload_timeout)
+        )
         logger.info(
             "Sending media container creation request to Instagram",
             endpoint="me/media",
             has_image_url=bool(image_url),
             has_video_url=bool(video_url),
             params_keys=list(params.keys()),
-            timeout=self.timeout,
+            timeout=media_timeout,
         )
         
         try:
@@ -274,7 +286,7 @@ class InstagramClient:
                 has_image=bool(image_url),
                 has_video=bool(video_url),
             )
-            response = self._make_request("POST", "me/media", data=params)
+            response = self._make_request("POST", "me/media", data=params, timeout_override=media_timeout)
             
             logger.info(
                 "Received response from Instagram API",
@@ -691,62 +703,68 @@ class InstagramClient:
         - May require Business/Creator account with messaging enabled
         
         Args:
-            recipient_username: Username of recipient (for identification)
+            recipient_username: Username of recipient (for identification; can be empty if recipient_id set)
             message: Message text to send
-            recipient_id: Optional Instagram user ID (more reliable than username)
+            recipient_id: Optional Instagram-scoped user ID (IGSID); prefer over username when available
             
         Returns:
             Result dictionary with status and dm_id
         """
+        username = (recipient_username or "").strip() or None
+        ig_id = (recipient_id or "").strip() or None
+        if not username and not ig_id:
+            return {
+                "status": "failed",
+                "error": "Recipient required: provide recipient_username or recipient_id (comment from.id).",
+                "error_code": None,
+                "recipient": None,
+            }
+        
         try:
-            # Instagram Graph API DM endpoint
-            # First, we need to get or create a conversation thread
-            # For now, we'll try the direct message endpoint
-            
-            # Method 1: Try sending via conversations API (if thread exists)
-            # Method 2: Try sending via message_creatives API
-            
-            # Note: Instagram's DM API is complex and has restrictions
-            # This is a simplified implementation that attempts to send DMs
-            
-            # Get account ID (IGSID)
             account_info = self.get_account_info()
             account_id = account_info.get("id")
-            
-            # Try to send via conversations API
-            # This requires the user to have previously messaged you
             endpoint = f"{account_id}/messages"
+            recipient = {"id": ig_id} if ig_id else {"username": username}
             
             response = self._make_request(
                 "POST",
                 endpoint,
                 data={
-                    "recipient": {"username": recipient_username} if recipient_username else {"id": recipient_id},
+                    "recipient": recipient,
                     "message": {"text": message},
                 }
             )
             
             logger.info(
                 "DM sent via Instagram Graph API",
-                recipient_username=recipient_username,
+                recipient_username=username,
+                recipient_id=ig_id,
                 message_length=len(message),
             )
             
             return {
                 "status": "success",
                 "dm_id": response.get("id") or response.get("message_id"),
-                "recipient": recipient_username,
+                "recipient": username or ig_id,
             }
             
         except InstagramAPIError as e:
             error_code = getattr(e, 'error_code', None)
             
-            # Common error codes for DM failures
-            if error_code in [100, 200, 10]:
-                # Permissions or business messaging not enabled
+            if error_code == 10:
                 logger.warning(
-                    "DM failed - may require messaging permissions or user to message first",
-                    recipient_username=recipient_username,
+                    "DM failed: Instagram 24-hour messaging window. User must message you first; "
+                    "commenting on a post does NOT open DMs. (code 10)",
+                    recipient_username=username,
+                    recipient_id=ig_id,
+                    error_code=error_code,
+                    error=str(e),
+                )
+            elif error_code in [100, 200]:
+                logger.warning(
+                    "DM failed - may require instagram_manage_messages, or user not found",
+                    recipient_username=username,
+                    recipient_id=ig_id,
                     error_code=error_code,
                     error=str(e),
                 )
@@ -755,5 +773,5 @@ class InstagramClient:
                 "status": "failed",
                 "error": str(e),
                 "error_code": error_code,
-                "recipient": recipient_username,
+                "recipient": username or ig_id,
             }

@@ -4,10 +4,12 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+import os
+
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, PlainTextResponse
 from jinja2 import Environment, FileSystemLoader
 
 from .api import router as api_router
@@ -173,6 +175,35 @@ def render_template(template_name: str, context: dict):
 
 # Include API router
 app.include_router(api_router)
+
+# --- Instagram webhook (for Meta app verification & development) ---
+WEBHOOK_VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN", "my_test_token_for_instagram_verification")
+
+
+@app.get("/webhooks/instagram", response_class=PlainTextResponse)
+async def webhook_instagram_verify(request: Request):
+    """
+    Meta sends GET with hub.mode, hub.verify_token, hub.challenge.
+    Echo hub.challenge if verify_token matches. Use this URL as Callback URL in your app.
+    """
+    mode = request.query_params.get("hub.mode")
+    token = request.query_params.get("hub.verify_token")
+    challenge = request.query_params.get("hub.challenge")
+    if mode == "subscribe" and token == WEBHOOK_VERIFY_TOKEN and challenge:
+        return PlainTextResponse(content=challenge)
+    raise HTTPException(status_code=403, detail="Verification failed")
+
+
+@app.post("/webhooks/instagram")
+async def webhook_instagram_events(request: Request):
+    """Receive Instagram webhook events from Meta. Log and return 200."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+    # Log for development; optionally process object, entry, etc.
+    print(f"Instagram webhook: {body}")
+    return {"status": "ok"}
 
 # Global InstaForge app instance
 instaforge_app: Optional[InstaForgeApp] = None

@@ -1,7 +1,7 @@
 accounts:
 - account_id: '1405915827600672'
   username: mr_tony.87
-  access_token: IGAATZBrEl8ZCSBBZAFlYSEQxZA3Rna3pIQ0JKWFBnYnVwUDFvQUpXS196T2pqQTExTkplVUFON0M5dnFOaXpvUFFkTFZACcUVwNUpNMGlWSVFBUkdiTkd4Y2NnMGVOWVYtbkRlWFJraHBhTkp2dDdwR3lxNGJnS2tOLVpHcUlxanA4NAZDZD
+  access_token: IGAATZBrEl8ZCSBBZAGFPZAEJxUV9GSGVXbkhjOG5VdHVmNDVDZADVGeVFDOFBsMWxyY0tYeFMzUDYySzVMQ3FHUG1YaHRQZA0pCYW5lWWFpWUg4RktTeC1Sd2RwYmNYMDFUS1ZAPRjBCdWxEX2ZApY0pVMXp6T2tUM2dZAMEtGMzF3XzZA2NAZDZD
   basic_display_token: IGAATZBrEl8ZCSBBZAGJLM2JmRVp4R3g4eTV5TEtUMEJkXzB0LU0xbllWNDJ0ZAVg0d3NLTVZAyTzBCSkNsV3lPQkFwZA2gyZAzU5ZAFZASd2dDMTRXeHMxZAmpHczh4cnlrVTNfTUpqMGNjeVo4Q0haYXdvOFNIVlpBaGYwQ01sQU5KajdJMAZDZD
   password: 12345678@
   proxy:
@@ -15,7 +15,7 @@ accounts:
     - follow
     - story_view
   comment_to_dm:
-    enabled: false
+    enabled: true
     trigger_keyword: AUTO
     dm_message_template: "Hey {username} \xF0\u0178\u2018\u2039 Thanks for commenting!\
       \ Here's the link you requested: {link}"

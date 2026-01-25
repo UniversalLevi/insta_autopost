@@ -46,5 +46,21 @@
     "file_path": null,
     "trigger_mode": "KEYWORD",
     "trigger_word": "link"
+  },
+  "1405915827600672:18356359792166760": {
+    "account_id": "1405915827600672",
+    "media_id": "18356359792166760",
+    "file_url": "file:///C:/Users/kanis/Downloads/cats.pdf",
+    "file_path": null,
+    "trigger_mode": "KEYWORD",
+    "trigger_word": "send "
+  },
+  "1405915827600672:18092499121817945": {
+    "account_id": "1405915827600672",
+    "media_id": "18092499121817945",
+    "file_url": "https://arkansas-performance-scene-lip.trycloudflare.com ",
+    "file_path": null,
+    "trigger_mode": "KEYWORD",
+    "trigger_word": "send"
   }
 }

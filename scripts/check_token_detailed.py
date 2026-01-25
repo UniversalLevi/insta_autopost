@@ -7,8 +7,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import requests
 import yaml
 
-# Load config
-with open("config/accounts.yaml", "r") as f:
+# Load config (config lives under data/ per config_manager)
+with open("data/accounts.yaml", "r", encoding="utf-8") as f:
     config = yaml.safe_load(f)
 
 account = config["accounts"][0]

@@ -79,12 +79,12 @@ class CommentService:
                 )
                 comments_count_from_media = None
             
-            # Get comments from media
+            # Get comments from media. Include from{id,username} for commenter identity (DM recipient).
             response = client._make_request(
                 "GET",
                 f"{media_id}/comments",
                 params={
-                    "fields": "id,text,username,timestamp,like_count,replies",
+                    "fields": "id,text,username,timestamp,like_count,replies,from{id,username}",
                     "limit": 100,
                 }
             )

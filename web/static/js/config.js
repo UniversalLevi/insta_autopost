@@ -163,6 +163,8 @@ function showAddAccountModal() {
     document.getElementById('acc-mode').value = 'add';
     document.getElementById('account-form').reset();
     document.getElementById('acc-id').disabled = false;
+    const dmEl = document.getElementById('acc-dm-enabled');
+    if (dmEl) dmEl.checked = true;  // Default Auto-DM on for new accounts
 }
 
 function closeAccountModal() {
@@ -210,8 +212,8 @@ async function saveAccount() {
             }
         };
     } else {
-         // New account default config
-         accountData.comment_to_dm = { enabled: false };
+         // New account default config (Auto-DM on by default)
+         accountData.comment_to_dm = { enabled: true };
     }
     
     // Also capture the new DM Enabled checkbox if we add it

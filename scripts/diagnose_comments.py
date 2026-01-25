@@ -226,7 +226,21 @@ class CommentDiagnostics:
                     if m['comment_count_field'] > 0 and m['api_returned_count'] == 0:
                         self.log("    -> WARNING:", "Comments exist but API returned 0. Possible permission/privacy issue.")
 
-            # 4. Rate Limit Status
+            # 4. Auto-reply / Comment automation readiness
+            self.log("Comment automation readiness", "")
+            comments_enabled = getattr(self.settings.comments, "enabled", False)
+            self.log("  - comments.enabled (settings):", "YES" if comments_enabled else "NO")
+            self.log("  - instagram_manage_comments:", perms.get("instagram_manage_comments", "?"))
+            fetch_ok = bool(media_results) and all(
+                m["api_returned_count"] >= 0 for m in media_results
+            )
+            self.log("  - Comment fetch test:", "OK" if fetch_ok else "CHECK ABOVE")
+            if comments_enabled and perms.get("instagram_manage_comments") == "GRANTED" and fetch_ok:
+                self.log("  -> Auto-reply ready:", "YES")
+            else:
+                self.log("  -> Auto-reply ready:", "NO (fix config/permissions)")
+
+            # 5. Rate Limit Status
             # We can check headers from the last request if we had access, 
             # but usually a successful call means we are not blocked.
             self.log("Rate Limit Status:", "OK (Calls succeeding)")

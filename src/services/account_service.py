@@ -21,13 +21,20 @@ class AccountService:
         self,
         accounts: List[Account],
         rate_limiter: Optional[RateLimiter] = None,
+        rate_limiter_posting: Optional[RateLimiter] = None,
         proxy_manager: Optional[ProxyManager] = None,
+        image_upload_timeout: int = 90,
+        video_upload_timeout: int = 180,
     ):
         self.accounts = {acc.account_id: acc for acc in accounts}
         self.clients: Dict[str, InstagramClient] = {}
+        self.posting_clients: Dict[str, InstagramClient] = {}
         self.lock = Lock()
         self.rate_limiter = rate_limiter
+        self.rate_limiter_posting = rate_limiter_posting or rate_limiter
         self.proxy_manager = proxy_manager
+        self.image_upload_timeout = image_upload_timeout
+        self.video_upload_timeout = video_upload_timeout
         
         # Initialize clients for each account
         self._initialize_clients()
@@ -44,14 +51,25 @@ class AccountService:
                     else:
                         proxy_url = account.proxy.proxy_url
                 
-                # Create client with account-specific configuration
+                # Create client for monitoring (comment / media fetch)
                 client = InstagramClient(
                     access_token=account.access_token,
                     rate_limiter=self.rate_limiter,
                     proxy_url=proxy_url,
+                    image_upload_timeout=self.image_upload_timeout,
+                    video_upload_timeout=self.video_upload_timeout,
                 )
-                
                 self.clients[account_id] = client
+                
+                # Create posting-only client with dedicated rate limiter (avoids starvation)
+                posting_client = InstagramClient(
+                    access_token=account.access_token,
+                    rate_limiter=self.rate_limiter_posting,
+                    proxy_url=proxy_url,
+                    image_upload_timeout=self.image_upload_timeout,
+                    video_upload_timeout=self.video_upload_timeout,
+                )
+                self.posting_clients[account_id] = posting_client
                 
                 logger.info(
                     "Initialized account client",
@@ -85,6 +103,24 @@ class AccountService:
             raise AccountError(f"Account not found: {account_id}")
         
         return self.clients[account_id]
+    
+    def get_posting_client(self, account_id: str) -> InstagramClient:
+        """
+        Get Instagram client for posting (uses dedicated rate limiter).
+        
+        Args:
+            account_id: Account identifier
+            
+        Returns:
+            InstagramClient instance
+            
+        Raises:
+            AccountError: If account not found
+        """
+        if account_id not in self.posting_clients:
+            raise AccountError(f"Account not found: {account_id}")
+        
+        return self.posting_clients[account_id]
     
     def get_account(self, account_id: str) -> Account:
         """

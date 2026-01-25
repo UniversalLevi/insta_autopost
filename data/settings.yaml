@@ -7,13 +7,13 @@ instagram:
   api_version: v18.0
   rate_limit:
     requests_per_hour: 200
-    requests_per_minute: 20
+    requests_per_minute: 25
     retry_after_seconds: 60
   posting:
     max_retries: 3
     retry_delay_seconds: 5
-    image_upload_timeout: 30
-    video_upload_timeout: 120
+    image_upload_timeout: 90
+    video_upload_timeout: 180
 logging:
   level: INFO
   format: json

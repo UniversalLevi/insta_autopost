@@ -24,6 +24,20 @@
     </div>
 
     <div class="form-group">
+        <label class="form-label flex items-center gap-2" style="cursor: pointer;">
+            <input type="checkbox" id="post-by-url-toggle" onchange="togglePostByUrl()">
+            Post by URL (recommended for videos)
+        </label>
+        <div class="text-sm text-muted">Use Cloudinary, Imgur, S3, or any public HTTPS URL. Avoid Cloudflare tunnel URLs.</div>
+    </div>
+
+    <div id="post-by-url-section" class="form-group hidden">
+        <label class="form-label">Media URLs</label>
+        <textarea id="media-urls" class="form-control" rows="3" placeholder="https://res.cloudinary.com/.../video.mp4&#10;https://i.imgur.com/abc.png"></textarea>
+        <div class="text-sm text-muted">One URL per line. Image: .jpg .png .webp. Video: .mp4 .mov</div>
+    </div>
+
+    <div id="upload-section" class="form-group">
         <label class="form-label">Upload Media</label>
         <div id="drop-zone" class="upload-zone">
             <div class="upload-content">
@@ -53,9 +67,10 @@
     <!-- Auto-DM Section -->
     <div class="form-group" style="border-top: 1px solid var(--border); padding-top: 1rem; margin-top: 1rem;">
         <label class="form-label flex items-center gap-2" style="cursor: pointer;">
-            <input type="checkbox" id="auto-dm-toggle" onchange="toggleAutoDM()"> 
+            <input type="checkbox" id="auto-dm-toggle" checked onchange="toggleAutoDM()"> 
             Enable Auto-DM for this post
         </label>
+        <div class="text-sm text-muted">Instagram allows DMs only if the user messaged you first (24h window). Commenting alone does not open DMs.</div>
         <div id="auto-dm-settings" class="hidden mt-2" style="margin-top: 0.5rem; padding-left: 1.5rem;">
             <div class="form-group">
                 <label class="form-label text-sm">Link or File URL to Send</label>

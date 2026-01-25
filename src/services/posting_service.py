@@ -198,7 +198,7 @@ class PostingService:
             raise PostingError("Post is currently being uploaded")
         
         account = self.account_service.get_account(post.account_id)
-        client = self.account_service.get_client(post.account_id)
+        client = self.account_service.get_posting_client(post.account_id)
         
         post.status = PostStatus.UPLOADING
         

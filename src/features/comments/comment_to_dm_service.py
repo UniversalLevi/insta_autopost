@@ -280,6 +280,43 @@ class CommentToDMService:
         # Remove from failed attempts if present
         if comment_id in self.failed_attempts[account_id]:
             del self.failed_attempts[account_id][comment_id]
+
+    def _reply_to_comment_with_link_fallback(
+        self,
+        client: Any,
+        account_id: str,
+        comment_id: str,
+        link_to_send: Optional[str],
+        comment_username: Optional[str],
+    ) -> bool:
+        """
+        When DM fails due to 24h window (code 10), reply to the comment with the link
+        so the user still receives it. Returns True if reply succeeded.
+        """
+        link = (link_to_send or "").strip()
+        is_public_url = link.startswith("http://") or link.startswith("https://")
+        name = comment_username or "there"
+        if is_public_url:
+            msg = f"Hey {name}! 👋 Instagram doesn't allow DMs unless you've messaged us first. Here's your link: {link}"
+        else:
+            msg = f"Hey {name}! 👋 Message us first (DM) so we can send you the link – Instagram restricts automated DMs."
+        try:
+            client._make_request("POST", f"{comment_id}/replies", data={"message": msg})
+            logger.info(
+                "Fallback reply posted (DM blocked by 24h window)",
+                account_id=account_id,
+                comment_id=comment_id,
+                has_link=is_public_url,
+            )
+            return True
+        except Exception as e:
+            logger.warning(
+                "Fallback reply failed",
+                account_id=account_id,
+                comment_id=comment_id,
+                error=str(e),
+            )
+            return False
     
     def process_new_comments_for_dm(
         self,
@@ -399,8 +436,14 @@ class CommentToDMService:
         """
         comment_id = comment.get("id")
         comment_text = comment.get("text", "")
-        comment_username = comment.get("username")
-        user_id = comment_username or comment.get("id", "unknown")
+        from_obj = comment.get("from")
+        if isinstance(from_obj, dict):
+            comment_username = comment.get("username") or from_obj.get("username")
+            commenter_ig_id = from_obj.get("id")
+        else:
+            comment_username = comment.get("username")
+            commenter_ig_id = None
+        user_id = comment_username or commenter_ig_id or comment_id or "unknown"
         
         result = {
             "status": "skipped",
@@ -489,6 +532,17 @@ class CommentToDMService:
             trigger_keyword=trigger_keyword,
         )
         
+        # DM requires commenter username or IGSID. Skip if neither available.
+        if not comment_username and not commenter_ig_id:
+            result["reason"] = "comment_author_identity_unavailable"
+            logger.warning(
+                "DM skipped: comment author username/from.id not returned by API (Instagram Login API may omit these)",
+                account_id=account_id,
+                comment_id=comment_id,
+                media_id=media_id,
+            )
+            return result
+        
         # Check if already sent DM to this user for this post today
         if self._is_user_already_dm_today(account_id, user_id, media_id):
             result["reason"] = "already_dm_today"
@@ -549,8 +603,9 @@ class CommentToDMService:
         # Send DM with retry logic
         try:
             dm_result = client.send_direct_message(
-                recipient_username=comment_username,
+                recipient_username=comment_username or "",
                 message=dm_message,
+                recipient_id=commenter_ig_id,
             )
             
             if dm_result.get("status") == "success":
@@ -570,6 +625,24 @@ class CommentToDMService:
                     media_id=media_id,
                     dm_id=result.get("dm_id"),
                     trigger_type=result["trigger_type"],
+                )
+            elif dm_result.get("error_code") == 10:
+                # Instagram 24h window: user must message you first. Commenting does NOT open DMs.
+                # Fallback: reply to comment with link so user still receives it.
+                self._reply_to_comment_with_link_fallback(
+                    client, account_id, comment_id, link_to_send, comment_username
+                )
+                result["status"] = "skipped"
+                result["reason"] = "instagram_24h_messaging_window"
+                self._record_successful_comment(account_id, comment_id, media_id)
+                
+                logger.warning(
+                    "DM skipped: Instagram 24-hour messaging window. User must message you first; "
+                    "commenting on a post does not open DMs. Fallback reply with link attempted.",
+                    account_id=account_id,
+                    comment_id=comment_id,
+                    user_id=user_id,
+                    media_id=media_id,
                 )
             else:
                 # Failed - record for retry

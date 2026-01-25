@@ -108,10 +108,12 @@ class CommentMonitor:
                 # Check if Comment-to-DM is enabled
                 is_dm_enabled = account.comment_to_dm and account.comment_to_dm.enabled
                 
+                # Check if auto-reply is enabled (from comment_service config)
+                is_auto_reply_enabled = self.comment_service.auto_reply_enabled
+                
                 # If no monitoring features are enabled, skip this cycle
-                # (Add checks for other features like auto-reply here if they become configurable)
-                if not is_dm_enabled:
-                    logger.debug("Comment monitoring skipped (feature disabled)", account_id=account_id)
+                if not is_dm_enabled and not is_auto_reply_enabled:
+                    logger.debug("Comment monitoring skipped (all features disabled)", account_id=account_id)
                     stop_event.wait(timeout=self.check_interval_seconds)
                     continue
 
