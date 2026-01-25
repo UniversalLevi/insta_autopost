@@ -8,27 +8,30 @@ document.addEventListener('DOMContentLoaded', () => {
 async function checkSystemStatus() {
     const statusEl = document.getElementById('system-status');
     const dotEl = document.querySelector('.status-dot');
-    
+
     if (!statusEl) return;
+
+    function setOk() {
+        statusEl.textContent = 'System Operational';
+        if (dotEl) { dotEl.classList.add('active'); dotEl.style.backgroundColor = 'var(--success)'; }
+    }
+    function setWarn() {
+        statusEl.textContent = 'System Issues';
+        if (dotEl) { dotEl.classList.remove('active'); dotEl.style.backgroundColor = 'var(--warning)'; }
+    }
+    function setErr() {
+        statusEl.textContent = 'Connection Lost';
+        if (dotEl) { dotEl.classList.remove('active'); dotEl.style.backgroundColor = 'var(--error)'; }
+    }
 
     try {
         const response = await fetch('/api/status');
         const data = await response.json();
-        
-        if (data.app_status === 'running') {
-            statusEl.textContent = 'System Operational';
-            dotEl.classList.add('active');
-            dotEl.style.backgroundColor = 'var(--success)';
-        } else {
-            statusEl.textContent = 'System Issues';
-            dotEl.classList.remove('active');
-            dotEl.style.backgroundColor = 'var(--warning)';
-        }
+        if (data.app_status === 'running') setOk();
+        else setWarn();
     } catch (error) {
         console.error('Status check failed:', error);
-        statusEl.textContent = 'Connection Lost';
-        dotEl.classList.remove('active');
-        dotEl.style.backgroundColor = 'var(--error)';
+        setErr();
     }
 }
 

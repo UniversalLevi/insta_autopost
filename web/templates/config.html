@@ -46,15 +46,30 @@
     </div>
 </div>
 
-<!-- Comment Automation Settings (Placeholder for Phase 6, but good to have structure) -->
+<!-- Comment Automation Settings -->
 <div class="card mt-4">
     <div class="flex justify-between items-center mb-4">
         <h2>Comment Automation Defaults</h2>
         <button class="btn btn-primary" onclick="saveCommentSettings()">Save</button>
     </div>
+    
+    <div class="form-group">
+         <label class="form-label flex items-center gap-2">
+             <input type="checkbox" id="comment-enabled"> Enable Auto-Reply
+         </label>
+         <div class="text-sm text-muted">Automatically reply to comments on posts</div>
+    </div>
+
+    <div class="form-group">
+        <label class="form-label">Reply Delay (seconds)</label>
+        <input type="number" id="comment-delay" class="form-control" value="30">
+        <div class="text-sm text-muted">Wait time before replying to avoid spam detection</div>
+    </div>
+
     <div class="form-group">
         <label class="form-label">Default Templates (One per line)</label>
         <textarea id="comment-templates" class="form-control" rows="4" placeholder="🔥\nLove this!\nGreat post!"></textarea>
+        <div class="text-sm text-muted">Randomly selected for each reply. Supports Spintax like {Hello|Hi|Hey}</div>
     </div>
 </div>
 

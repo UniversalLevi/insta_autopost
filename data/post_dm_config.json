@@ -38,5 +38,13 @@
     "file_path": null,
     "trigger_mode": "AUTO",
     "trigger_word": "AUTO"
+  },
+  "1405915827600672:18093378395493574": {
+    "account_id": "1405915827600672",
+    "media_id": "18093378395493574",
+    "file_url": "https://1024terabox.com/s/1KBshGaG48qQ8ILoIJLdWwQ",
+    "file_path": null,
+    "trigger_mode": "KEYWORD",
+    "trigger_word": "link"
   }
 }

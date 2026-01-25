@@ -28,6 +28,7 @@ from src.models.post import PostMedia, Post, PostStatus
 from src.models.account import Account, ProxyConfig, WarmingConfig, CommentToDMConfig
 from src.app import InstaForgeApp
 from src.utils.config import config_manager, Settings
+from src.services.scheduled_posts_store import add_scheduled
 
 
 router = APIRouter(prefix="/api", tags=["api"])
@@ -190,39 +191,65 @@ async def create_post(request: Request, post_data: CreatePostRequest, app: Insta
             if not post_data.urls or len(post_data.urls) != 1:
                 raise HTTPException(status_code=400, detail=f"{media_type.capitalize()} posts require exactly 1 URL.")
             
+            # Infer media_type from URL so .mp4 etc. are never sent as image (fixes Instagram timeout)
+            url0 = post_data.urls[0].lower()
+            if url0.endswith((".mp4", ".mov", ".avi", ".mkv")):
+                media_type = "video"
+            
             media = PostMedia(media_type=media_type, url=HttpUrl(post_data.urls[0]), caption=post_data.caption)
         
-        # Create post (using threadpool to avoid blocking event loop)
+        # Localhost check (always, including scheduled)
+        for url in post_data.urls:
+            if "localhost" in url or "127.0.0.1" in url or url.startswith("http://"):
+                raise HTTPException(status_code=400, detail="Instagram requires public HTTPS URLs.")
+
+        is_scheduled = post_data.scheduled_time is not None
+
+        if is_scheduled:
+            # Persist scheduled post; publish later via background job
+            sid = add_scheduled(
+                account_id=post_data.account_id,
+                media_type=media_type,
+                urls=post_data.urls,
+                caption=post_data.caption or "",
+                scheduled_time=post_data.scheduled_time,
+                hashtags=post_data.hashtags,
+            )
+            post = await run_in_threadpool(
+                app.posting_service.create_post,
+                account_id=post_data.account_id,
+                media=media,
+                caption=post_data.caption,
+                scheduled_time=post_data.scheduled_time,
+            )
+            post.hashtags = post_data.hashtags or []
+            return PostResponse(
+                post_id=sid,
+                account_id=post.account_id,
+                media_type=media_type,
+                caption=post.caption,
+                hashtags=post.hashtags,
+                status="scheduled",
+                instagram_media_id=None,
+                published_at=None,
+                created_at=post.created_at,
+                error_message=None,
+            )
+        # Immediate publish
         post = await run_in_threadpool(
             app.posting_service.create_post,
             account_id=post_data.account_id,
             media=media,
             caption=post_data.caption,
-            scheduled_time=post_data.scheduled_time,
+            scheduled_time=None,
         )
         post.hashtags = post_data.hashtags or []
-        
-        # Publish if not scheduled
-        if not post_data.scheduled_time:
-            # Localhost check
-            for url in post_data.urls:
-                if "localhost" in url or "127.0.0.1" in url or url.startswith("http://"):
-                     raise HTTPException(status_code=400, detail="Instagram requires public HTTPS URLs.")
-            
-            try:
-                # Run synchronous publish_post in threadpool to prevent blocking the event loop
-                # This is critical because publish_post makes network requests that might trigger
-                # verification callbacks to this same server (e.g., Cloudflare tunnel verification)
-                post = await run_in_threadpool(app.posting_service.publish_post, post)
-            except Exception as e:
-                # Basic error handling, service should log details
-                # Don't fail the request completely if publishing fails, but return error details
-                # This allows frontend to see specific error (like 9004) without a generic 500/400
-                post.status = "failed"
-                post.error_message = str(e)
-                # Re-raise for now to match current behavior but could be softened
-                raise HTTPException(status_code=400, detail=f"Publishing failed: {str(e)}")
-        
+        try:
+            post = await run_in_threadpool(app.posting_service.publish_post, post)
+        except Exception as e:
+            post.status = PostStatus.FAILED
+            post.error_message = str(e)
+            raise HTTPException(status_code=400, detail=f"Publishing failed: {str(e)}")
         return PostResponse(
             post_id=str(post.post_id) if post.post_id else None,
             account_id=post.account_id,
@@ -270,10 +297,12 @@ async def get_published_posts(request: Request, limit: int = 20, account_id: Opt
 @router.get("/logs")
 async def get_logs(lines: int = 100, level: Optional[str] = None):
     """Get recent log entries"""
-    # Use config setting for path if available, else default
     settings = config_manager.load_settings()
-    log_path = Path(settings.logging.file_path)
-    
+    fp = settings.logging.file_path
+    # Resolve relative to project root (web/api.py -> web -> project root)
+    project_root = Path(__file__).resolve().parent.parent
+    log_path = (project_root / fp) if not Path(fp).is_absolute() else Path(fp)
+
     if not log_path.exists():
         return {"logs": [], "count": 0}
     
@@ -364,7 +393,7 @@ async def upload_files(request: Request, files: List[UploadFile] = File(...)):
             with open(file_path, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
             
-            file_url = f"{base_url}/uploads/{unique_filename}"
+            file_url = f"{base_url}/uploads/{unique_filename}?t={int(datetime.utcnow().timestamp())}"
             uploaded_urls.append({
                 "url": file_url,
                 "originalName": file.filename,

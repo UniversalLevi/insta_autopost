@@ -84,7 +84,7 @@ class PostingService:
             
             # Wait for children to be ready before creating carousel
             logger.info("Waiting for carousel children to be ready", child_count=len(child_ids))
-            time.sleep(3)
+            time.sleep(10)  # Increased wait time for better stability
             
             return client.create_carousel_container(
                 children=child_ids,

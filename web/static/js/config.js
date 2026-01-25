@@ -72,20 +72,24 @@ async function saveGlobalSettings() {
         
         if (!currentSettings.instagram) currentSettings.instagram = {};
         if (!currentSettings.instagram.rate_limit) currentSettings.instagram.rate_limit = {};
-        currentSettings.instagram.rate_limit.requests_per_hour = parseInt(document.getElementById('rate-hour').value);
-        currentSettings.instagram.rate_limit.requests_per_minute = parseInt(document.getElementById('rate-minute').value);
-        
+        currentSettings.instagram.rate_limit.requests_per_hour = parseInt(document.getElementById('rate-hour').value, 10) || 200;
+        currentSettings.instagram.rate_limit.requests_per_minute = parseInt(document.getElementById('rate-minute').value, 10) || 20;
+
         if (!currentSettings.instagram.posting) currentSettings.instagram.posting = {};
-        currentSettings.instagram.posting.max_retries = parseInt(document.getElementById('post-retries').value);
+        currentSettings.instagram.posting.max_retries = parseInt(document.getElementById('post-retries').value, 10) || 3;
         
         const response = await fetch('/api/config/settings', {
             method: 'PUT',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(currentSettings)
         });
-        
-        if (!response.ok) throw new Error('Failed to save settings');
-        
+
+        if (!response.ok) {
+            const errBody = await response.json().catch(() => ({}));
+            const msg = Array.isArray(errBody.detail) ? errBody.detail.map(e => e.msg || JSON.stringify(e)).join('; ') : (errBody.detail || 'Failed to save settings');
+            throw new Error(msg);
+        }
+
         alert('Settings saved!');
     } catch (error) {
         alert('Error saving settings: ' + error.message);
@@ -94,11 +98,60 @@ async function saveGlobalSettings() {
 
 // Comment Settings
 async function loadCommentSettings() {
-    // Placeholder for now
+    try {
+        const response = await fetch('/api/config/settings');
+        const settings = await response.json();
+        const comments = settings.comments || {};
+        
+        document.getElementById('comment-enabled').checked = comments.enabled || false;
+        document.getElementById('comment-delay').value = comments.delay_seconds || 30;
+        
+        if (comments.templates && Array.isArray(comments.templates)) {
+            document.getElementById('comment-templates').value = comments.templates.join('\n');
+        } else {
+            document.getElementById('comment-templates').value = '';
+        }
+    } catch (error) {
+        console.error('Failed to load comment settings:', error);
+    }
 }
 
 async function saveCommentSettings() {
-    alert('Global comment settings not yet implemented in backend schema.');
+    try {
+        // Fetch current settings first to preserve other sections
+        const currentSettingsRes = await fetch('/api/config/settings');
+        const currentSettings = await currentSettingsRes.json();
+        
+        // Prepare comment settings
+        const enabled = document.getElementById('comment-enabled').checked;
+        const delay = parseInt(document.getElementById('comment-delay').value) || 30;
+        const templatesText = document.getElementById('comment-templates').value;
+        const templates = templatesText.split('\n').map(t => t.trim()).filter(t => t.length > 0);
+        
+        // Update settings object
+        currentSettings.comments = {
+            enabled: enabled,
+            delay_seconds: delay,
+            templates: templates
+        };
+        
+        // Save
+        const response = await fetch('/api/config/settings', {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(currentSettings)
+        });
+        
+        if (!response.ok) {
+            const errBody = await response.json().catch(() => ({}));
+            const msg = Array.isArray(errBody.detail) ? errBody.detail.map(e => e.msg || JSON.stringify(e)).join('; ') : (errBody.detail || 'Failed to save comment settings');
+            throw new Error(msg);
+        }
+
+        alert('Comment settings saved!');
+    } catch (error) {
+        alert('Error saving comment settings: ' + error.message);
+    }
 }
 
 // Account Modal

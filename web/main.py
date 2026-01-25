@@ -12,6 +12,7 @@ from jinja2 import Environment, FileSystemLoader
 
 from .api import router as api_router
 from .cloudflare_helper import start_cloudflare, stop_cloudflare, get_cloudflare_url
+from .scheduled_publisher import start_scheduled_publisher, stop_scheduled_publisher
 from src.app import InstaForgeApp
 
 # Add parent directory to path
@@ -197,6 +198,8 @@ async def startup_event():
         # Set app instance for API routes
         from .api import set_app_instance
         set_app_instance(instaforge_app)
+        # Start background loop to publish scheduled posts when due
+        start_scheduled_publisher(instaforge_app, interval_seconds=60)
     except Exception as e:
         print(f"Warning: Failed to initialize InstaForge app: {e}")
 
@@ -210,7 +213,7 @@ async def shutdown_event():
     stop_cloudflare()
     
     if instaforge_app:
-        # Stop comment monitoring
+        stop_scheduled_publisher()
         if instaforge_app.comment_monitor:
             instaforge_app.comment_monitor.stop_monitoring_all_accounts()
         instaforge_app.shutdown()

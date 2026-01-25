@@ -1,0 +1,43 @@
+{
+  "posts": [
+    {
+      "id": "53b4286b-244e-4a8e-9d38-d736de7ceb1e",
+      "account_id": "1405915827600672",
+      "media_type": "image",
+      "urls": [
+        "https://phantom-basis-urban-reprint.trycloudflare.com/uploads/4c48efd2-274a-4d37-8abe-396b92b1d210.png?t=1769307356"
+      ],
+      "caption": "Fluffy ginger and white kitten with bright blue eyes. #cute #kitten #pets #adorable",
+      "hashtags": [],
+      "scheduled_time": "2026-01-26T13:15:00",
+      "status": "scheduled",
+      "created_at": "2026-01-25T07:46:02.415290"
+    },
+    {
+      "id": "e5d2c555-93dd-4076-b771-ff3f01c89000",
+      "account_id": "1405915827600672",
+      "media_type": "image",
+      "urls": [
+        "https://phantom-basis-urban-reprint.trycloudflare.com/uploads/804f71ea-9bdf-440f-b165-7fafd805c880.png?t=1769307358"
+      ],
+      "caption": "Tabby kitten jumping and pouncing. #kitten #tabby #playful #cute #adorable",
+      "hashtags": [],
+      "scheduled_time": "2026-01-26T13:15:00",
+      "status": "scheduled",
+      "created_at": "2026-01-25T07:46:04.461289"
+    },
+    {
+      "id": "08c6c7dc-054a-4fde-8bec-8c5f3fb5159c",
+      "account_id": "1405915827600672",
+      "media_type": "image",
+      "urls": [
+        "https://phantom-basis-urban-reprint.trycloudflare.com/uploads/dd6826f3-937d-4122-a701-faa278cbff99.png?t=1769307360"
+      ],
+      "caption": "Cream kitten with big blue eyes. #kitten #cute #fluffy #adorable",
+      "hashtags": [],
+      "scheduled_time": "2026-01-26T13:15:00",
+      "status": "scheduled",
+      "created_at": "2026-01-25T07:46:06.505171"
+    }
+  ]
+}

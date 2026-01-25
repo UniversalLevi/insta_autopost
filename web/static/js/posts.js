@@ -15,22 +15,27 @@ async function loadPosts() {
             return;
         }
 
-        grid.innerHTML = data.posts.map(post => `
+        grid.innerHTML = data.posts.map(post => {
+            const permalink = post.permalink || '#';
+            const mediaType = post.media_type || 'IMAGE';
+            const dateStr = post.timestamp ? (() => { try { return new Date(post.timestamp).toLocaleDateString(); } catch (_) { return 'Unknown'; } })() : 'Unknown';
+            return `
             <div class="card" style="padding: 0; overflow: hidden; margin: 0;">
                 <div style="padding: 1rem; border-bottom: 1px solid var(--border);">
                     <div class="flex justify-between items-center">
-                        <span class="badge ${post.media_type === 'IMAGE' || post.media_type === 'CAROUSEL_ALBUM' ? 'badge-info' : 'badge-error'}">${post.media_type}</span>
-                        <span class="text-sm text-muted">${post.timestamp ? new Date(post.timestamp).toLocaleDateString() : 'Unknown'}</span>
+                        <span class="badge ${mediaType === 'IMAGE' || mediaType === 'CAROUSEL_ALBUM' ? 'badge-info' : 'badge-error'}">${mediaType}</span>
+                        <span class="text-sm text-muted">${dateStr}</span>
                     </div>
                 </div>
                 <div style="padding: 1rem;">
-                    <p class="text-sm mb-4" style="display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">${post.caption || 'No caption'}</p>
-                    <a href="${post.permalink}" target="_blank" class="text-sm" style="color: var(--primary); text-decoration: none;">
+                    <p class="text-sm mb-4" style="display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">${(post.caption || 'No caption').replace(/</g, '&lt;')}</p>
+                    <a href="${permalink}" target="_blank" rel="noopener" class="text-sm" style="color: var(--primary); text-decoration: none;">
                         View on Instagram ↗
                     </a>
                 </div>
             </div>
-        `).join('');
+        `;
+        }).join('');
 
     } catch (error) {
         console.error('Failed to load posts:', error);

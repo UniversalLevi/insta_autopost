@@ -27,18 +27,22 @@ async function loadLogs() {
             if (log.level === 'WARNING') badgeStyle = 'background: #FEF3C7; color: #92400E;';
             if (log.level === 'ERROR') badgeStyle = 'background: #FEE2E2; color: #991B1B;';
             if (log.level === 'INFO') badgeStyle = 'background: #DBEAFE; color: #1E40AF;';
-            
-            let message = log.message;
+
+            let timeStr = '—';
+            try {
+                if (log.timestamp) timeStr = new Date(log.timestamp).toLocaleTimeString();
+            } catch (_) {}
+
+            let message = log.message || log.event || '';
             if (log.data && Object.keys(log.data).length > 0) {
-                // Pretty print specific fields if needed, or just JSON
-                message += `<br><span class="text-muted text-sm" style="font-size: 0.8rem;">${JSON.stringify(log.data)}</span>`;
+                message += `<br><span class="text-muted text-sm" style="font-size: 0.8rem;">${JSON.stringify(log.data).replace(/</g, '&lt;')}</span>`;
             }
 
             return `
             <tr class="log-row">
-                <td class="text-sm font-mono" style="white-space: nowrap;">${new Date(log.timestamp).toLocaleTimeString()}</td>
-                <td><span class="badge" style="${badgeStyle}">${log.level}</span></td>
-                <td class="font-mono text-sm" style="word-break: break-all;">${message}</td>
+                <td class="text-sm font-mono" style="white-space: nowrap;">${timeStr}</td>
+                <td><span class="badge" style="${badgeStyle}">${log.level || 'INFO'}</span></td>
+                <td class="font-mono text-sm" style="word-break: break-all;">${message.replace(/</g, '&lt;')}</td>
             </tr>
         `}).join('');
 

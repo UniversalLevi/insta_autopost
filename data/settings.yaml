@@ -30,6 +30,7 @@ proxies:
   verify_ssl: false
   webhooks: null
 comments:
-  enabled: false
-  templates: []
-  delay_seconds: 30
+  enabled: true
+  templates:
+  - heyy, here's the link https://www.1024tera.com/sharing/link?surl=KBshGaG48qQ8ILoIJLdWwQ
+  delay_seconds: 3

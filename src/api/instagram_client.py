@@ -311,18 +311,31 @@ class InstagramClient:
                 error_type=type(e).__name__,
             )
             
-            # If error 9004, provide more helpful error message
-            if error_code == 9004:
+            # If error 9004 or 2207067, provide more helpful error message
+            if error_code == 9004 or error_subcode == 2207067:
                 raise InstagramAPIError(
-                    f"Instagram cannot access the media URL (error 9004). "
+                    f"Instagram cannot access the media URL (error {error_code}/{error_subcode}). "
                     f"This usually means:\n"
                     f"1) Cloudflare's trycloudflare.com is blocking Instagram's bot\n"
                     f"2) The URL is returning HTML instead of the image\n"
                     f"3) The server is blocking Instagram's crawler\n\n"
-                    f"Solution: Use a production static file host like AWS S3, Cloudinary, or Firebase Storage\n"
+                    f"Solution: Use a production static file host like AWS S3, Cloudinary, or Firebase Storage, or try restarting the Cloudflare tunnel.\n"
                     f"URL: {media_url}\n"
                     f"Original error: {str(e)}",
-                    error_code=9004,
+                    error_code=error_code,
+                    error_subcode=error_subcode,
+                )
+            # Timeout -2 / 2207003: Instagram timed out fetching/processing media (often video)
+            if error_code == -2 or error_subcode == 2207003:
+                raise InstagramAPIError(
+                    f"Instagram timed out fetching/processing the media (error {error_code}/{error_subcode}). "
+                    f"For videos, this often means:\n"
+                    f"1) File is too large or slow to serve over Cloudflare tunnel\n"
+                    f"2) URL was sent as image instead of video (now fixed: .mp4 uses video container)\n\n"
+                    f"Solution: Use production hosting (S3, Cloudinary, etc.) for videos, or use a shorter/smaller clip.\n"
+                    f"URL: {media_url}\n"
+                    f"Original error: {str(e)}",
+                    error_code=error_code,
                     error_subcode=error_subcode,
                 )
             raise
