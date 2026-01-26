@@ -66,6 +66,20 @@ async def serve_upload_file_options(filename: str):
         }
     )
 
+@app.options("/uploads/{filename:path}")
+async def serve_upload_file_options(filename: str):
+    """Handle CORS preflight requests for uploads"""
+    from fastapi.responses import Response
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Max-Age": "3600",
+        }
+    )
+
 @app.get("/uploads/{filename:path}")
 @app.head("/uploads/{filename:path}")
 async def serve_upload_file(filename: str, request: Request):
