@@ -909,18 +909,90 @@ async def get_batch_campaign(campaign_id: str):
 
 @router.get("/test/verify-url")
 async def verify_url(url: str):
-    """Test URL accessibility"""
+    """Test URL accessibility with Instagram's user agent"""
     try:
-        headers = {"User-Agent": "Mozilla/5.0", "Accept": "image/*,video/*"}
+        # Test with Instagram's actual user agent
+        headers = {
+            "User-Agent": "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
+            "Accept": "image/*,video/*,*/*",
+        }
         response = await run_in_threadpool(requests.head, url, headers=headers, timeout=10, allow_redirects=True)
+        
+        content_type = response.headers.get("Content-Type", "")
+        is_image = any(ct in content_type.lower() for ct in ["image/jpeg", "image/png", "image/gif", "image/webp"])
+        is_video = any(ct in content_type.lower() for ct in ["video/mp4", "video/quicktime"])
+        is_html = "text/html" in content_type.lower()
+        
+        # If HTML, try to get a snippet to see what error we're getting
+        error_preview = None
+        if is_html or response.status_code != 200:
+            try:
+                get_response = await run_in_threadpool(requests.get, url, headers=headers, timeout=5, allow_redirects=True)
+                error_preview = get_response.text[:200] if get_response.text else None
+            except:
+                pass
+        
         return {
             "url": url,
             "status_code": response.status_code,
-            "content_type": response.headers.get("Content-Type"),
-            "is_valid": response.status_code == 200,
+            "content_type": content_type,
+            "content_length": response.headers.get("Content-Length"),
+            "is_valid": response.status_code == 200 and (is_image or is_video),
+            "is_image": is_image,
+            "is_video": is_video,
+            "is_html": is_html,
+            "error_preview": error_preview,
+            "warning": "URL returns HTML instead of media" if is_html else None,
+            "all_headers": dict(response.headers),
         }
     except Exception as e:
         return {"url": url, "error": str(e), "is_valid": False}
+
+@router.get("/test/check-file")
+async def check_file(filename: str):
+    """Check if a file exists in uploads directory"""
+    from pathlib import Path
+    import os
+    
+    # Get absolute path to uploads directory (works from any working directory)
+    base_dir = Path(__file__).parent.parent  # Go up from web/ to project root
+    uploads_path = base_dir / "uploads"
+    file_path = uploads_path / filename
+    
+    try:
+        if not file_path.exists():
+            return {
+                "filename": filename,
+                "exists": False,
+                "error": "File not found",
+                "path": str(file_path),
+            }
+        
+        if not file_path.is_file():
+            return {
+                "filename": filename,
+                "exists": False,
+                "error": "Path is not a file",
+                "path": str(file_path),
+            }
+        
+        file_size = file_path.stat().st_size
+        ext = file_path.suffix.lower()
+        
+        return {
+            "filename": filename,
+            "exists": True,
+            "size": file_size,
+            "extension": ext,
+            "path": str(file_path),
+            "readable": os.access(file_path, os.R_OK),
+        }
+    except Exception as e:
+        return {
+            "filename": filename,
+            "exists": False,
+            "error": str(e),
+        }
 
 
 @router.get("/webhooks/callback-url")

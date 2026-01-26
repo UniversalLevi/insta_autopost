@@ -107,7 +107,13 @@ async def serve_upload_file(filename: str, request: Request):
         raise HTTPException(status_code=403, detail="Invalid file path")
     
     if not file_path.exists() or not file_path.is_file():
-        raise HTTPException(status_code=404, detail="File not found")
+        logger.warning(
+            "File not found for upload request",
+            filename=filename,
+            file_path=str(file_path),
+            user_agent=request.headers.get("User-Agent", "Unknown")[:100],
+        )
+        raise HTTPException(status_code=404, detail=f"File not found: {filename}")
     
     # Get file size
     file_size = file_path.stat().st_size
@@ -132,11 +138,16 @@ async def serve_upload_file(filename: str, request: Request):
         if not content_type:
             content_type = "application/octet-stream"
     
-    # Log for debugging (only in development)
-    ENVIRONMENT = os.getenv("ENVIRONMENT", "development").lower()
-    if ENVIRONMENT == "development":
-        user_agent = request.headers.get("User-Agent", "Unknown")
-        print(f"DEBUG: Serving file {filename} | Content-Type: {content_type} | Size: {file_size} | User-Agent: {user_agent}")
+    # Log for debugging (always log in production for troubleshooting)
+    user_agent = request.headers.get("User-Agent", "Unknown")
+    logger.info(
+        "Serving uploaded file",
+        filename=filename,
+        content_type=content_type,
+        file_size=file_size,
+        user_agent=user_agent[:100],  # Truncate long user agents
+        method=request.method,
+    )
     
     # Build headers that Instagram requires
     # CRITICAL: No cookies, no auth, no redirects

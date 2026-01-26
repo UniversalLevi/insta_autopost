@@ -234,6 +234,17 @@ class InstagramClient:
         Returns:
             Container ID for publishing
         """
+        # Strip query parameters from URLs (Instagram doesn't need them, and they can cause issues)
+        # Query params are only for browser cache busting
+        def clean_url(url: Optional[str]) -> Optional[str]:
+            if not url:
+                return url
+            # Remove query parameters and fragments
+            return url.split("?")[0].split("#")[0]
+        
+        image_url = clean_url(image_url)
+        video_url = clean_url(video_url)
+        
         # Verify media URL is accessible before sending to Instagram
         media_url = image_url or video_url
         if media_url:
@@ -427,10 +438,19 @@ class InstagramClient:
             
             # Check if we got a successful response
             if status_code != 200:
+                # Log detailed error for debugging
+                logger.error(
+                    "Media URL verification failed",
+                    url=url,
+                    status_code=status_code,
+                    content_type=content_type,
+                    headers=dict(response.headers),
+                )
                 raise InstagramAPIError(
                     f"Media URL returned status {status_code} instead of 200. "
                     f"This means Instagram's crawler cannot access the URL. "
-                    f"Cloudflare's trycloudflare.com may be blocking Instagram's bot. "
+                    f"Check: 1) File exists on server, 2) Apache is proxying /uploads/ correctly, "
+                    f"3) File permissions allow read access. "
                     f"URL: {url}",
                     error_code=9004,
                 )
@@ -441,11 +461,24 @@ class InstagramClient:
             
             # If Content-Type is text/html, the server is likely returning an error page
             if "text/html" in content_type:
+                # Try to get the actual response body to see what error we're getting
+                try:
+                    response_body = response.text[:500]  # First 500 chars
+                    logger.error(
+                        "Media URL returns HTML instead of media",
+                        url=url,
+                        content_type=content_type,
+                        response_preview=response_body,
+                    )
+                except:
+                    pass
+                
                 raise InstagramAPIError(
                     f"Media URL is returning HTML instead of an image/video. "
-                    f"This usually means Cloudflare is showing a blocking page or the server returned an error. "
+                    f"This usually means: 1) Apache is returning an error page, 2) File doesn't exist, "
+                    f"3) Apache proxy is misconfigured. "
                     f"Content-Type: {content_type}. "
-                    f"Instagram will reject this with error 9004. "
+                    f"Check Apache logs and verify file exists. "
                     f"URL: {url}",
                     error_code=9004,
                 )
