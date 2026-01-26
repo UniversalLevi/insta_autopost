@@ -5,6 +5,15 @@ import os
 import sys
 from pathlib import Path
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    env_path = Path(__file__).parent / ".env"
+    if env_path.exists():
+        load_dotenv(env_path)
+except ImportError:
+    pass  # python-dotenv not installed, use system env vars
+
 if __name__ == "__main__":
     # Ensure the current directory is in sys.path so imports work correctly
     root_dir = os.path.dirname(os.path.abspath(__file__))
