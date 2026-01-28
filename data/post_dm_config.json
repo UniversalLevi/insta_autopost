@@ -124,5 +124,14 @@
     "trigger_mode": "AUTO",
     "trigger_word": "AUTO",
     "ai_enabled": true
+  },
+  "17841457878364664:17910774783143513": {
+    "account_id": "17841457878364664",
+    "media_id": "17910774783143513",
+    "file_url": "https://app.manychat.com/fb4239648/dashboard",
+    "file_path": null,
+    "trigger_mode": "AUTO",
+    "trigger_word": "AUTO",
+    "ai_enabled": true
   }
 }

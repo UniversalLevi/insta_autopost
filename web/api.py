@@ -73,6 +73,16 @@ def get_app() -> InstaForgeApp:
     return _app_instance
 
 
+@router.get("/health")
+async def health_check():
+    """Health check endpoint for deployment platforms"""
+    return {
+        "status": "healthy",
+        "service": "instaforge",
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+
 def _fetch_instagram_business_account(user_token: str) -> tuple:
     """
     Call /me/accounts (fields=id,name,access_token,instagram_business_account), get first Page ID
@@ -649,6 +659,52 @@ async def get_status(app: InstaForgeApp = Depends(get_app)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get status: {str(e)}")
 
+
+@router.post("/warming/run")
+async def run_warming_now(app: InstaForgeApp = Depends(get_app)):
+    """Manually trigger warming actions for all accounts"""
+    try:
+        logger.info("Manual warming trigger requested")
+        results = app.run_warming_now()
+        
+        return {
+            "status": "success",
+            "message": "Warming actions executed",
+            "results": results,
+        }
+    except Exception as e:
+        logger.exception("Failed to run warming", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to run warming: {str(e)}")
+
+
+@router.get("/warming/status")
+async def get_warming_status(app: InstaForgeApp = Depends(get_app)):
+    """Get warming status for all accounts"""
+    try:
+        accounts = app.account_service.list_accounts()
+        
+        warming_status = []
+        for account in accounts:
+            warming_config = account.warming if account.warming else None
+            warming_status.append({
+                "account_id": account.account_id,
+                "username": account.username,
+                "enabled": warming_config.enabled if warming_config else False,
+                "daily_actions": warming_config.daily_actions if warming_config else 0,
+                "action_types": warming_config.action_types if warming_config else [],
+            })
+        
+        schedule_time = app.config.warming.schedule_time if app.config else "09:00"
+        
+        return {
+            "status": "success",
+            "schedule_time": schedule_time,
+            "accounts": warming_status,
+        }
+    except Exception as e:
+        logger.exception("Failed to get warming status", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to get warming status: {str(e)}")
+
 @router.post("/upload")
 async def upload_files(request: Request, files: List[UploadFile] = File(...)):
     """Upload media files"""
@@ -1066,6 +1122,242 @@ async def test_ai_reply(
             "status": "error",
             "error": str(e),
             "reply": None,
+        }
+
+
+@router.get("/api/ai/profile")
+async def get_ai_profile(
+    account_id: Optional[str] = None,
+    app: InstaForgeApp = Depends(get_app),
+):
+    """Get AI profile for an account"""
+    try:
+        from src.features.ai_brain import AISettingsService
+        
+        if not account_id:
+            accounts = app.account_service.list_accounts()
+            if not accounts:
+                return {
+                    "status": "error",
+                    "error": "No accounts configured",
+                    "account_id": None,
+                    "profile": None,
+                }
+            account_id = accounts[0].account_id
+        
+        ai_service = AISettingsService()
+        profile = ai_service.get_profile(account_id)
+        
+        return {
+            "status": "success",
+            "account_id": account_id,
+            "profile": profile,
+        }
+    except ImportError as e:
+        logger.error("AI Brain module not available", error=str(e))
+        return {
+            "status": "error",
+            "error": "AI Brain module not available. Please ensure all dependencies are installed.",
+            "account_id": account_id,
+            "profile": None,
+        }
+    except Exception as e:
+        logger.exception("Failed to get AI profile", error=str(e))
+        return {
+            "status": "error",
+            "error": f"Failed to get AI profile: {str(e)}",
+            "account_id": account_id,
+            "profile": None,
+        }
+
+
+@router.post("/api/ai/profile/update")
+async def update_ai_profile(
+    account_id: Optional[str] = Form(None),
+    brand_name: Optional[str] = Form(None),
+    business_type: Optional[str] = Form(None),
+    tone: Optional[str] = Form(None),
+    language: Optional[str] = Form(None),
+    pricing: Optional[str] = Form(None),
+    location: Optional[str] = Form(None),
+    about_business: Optional[str] = Form(None),
+    custom_rules: Optional[str] = Form(None),
+    custom_prompt: Optional[str] = Form(None),
+    enable_memory: Optional[bool] = Form(None),
+    app: InstaForgeApp = Depends(get_app),
+):
+    """Update AI profile for an account"""
+    try:
+        from src.features.ai_brain import AISettingsService
+        
+        if not account_id:
+            accounts = app.account_service.list_accounts()
+            if not accounts:
+                return {
+                    "status": "error",
+                    "error": "No accounts configured",
+                    "account_id": None,
+                    "profile": None,
+                }
+            account_id = accounts[0].account_id
+        
+        ai_service = AISettingsService()
+        
+        # Build update data
+        update_data = {}
+        if brand_name is not None:
+            update_data["brand_name"] = brand_name
+        if business_type is not None:
+            update_data["business_type"] = business_type
+        if tone is not None:
+            update_data["tone"] = tone
+        if language is not None:
+            update_data["language"] = language
+        if pricing is not None:
+            update_data["pricing"] = pricing
+        if location is not None:
+            update_data["location"] = location
+        if about_business is not None:
+            update_data["about_business"] = about_business
+        if custom_rules is not None:
+            # Parse custom rules (comma-separated or newline-separated)
+            rules = [r.strip() for r in custom_rules.replace("\n", ",").split(",") if r.strip()]
+            update_data["custom_rules"] = rules
+        if custom_prompt is not None:
+            update_data["custom_prompt"] = custom_prompt
+        if enable_memory is not None:
+            update_data["enable_memory"] = enable_memory
+        
+        profile = ai_service.update_profile(account_id, update_data)
+        
+        return {
+            "status": "success",
+            "account_id": account_id,
+            "profile": profile,
+        }
+    except ImportError as e:
+        logger.error("AI Brain module not available", error=str(e))
+        return {
+            "status": "error",
+            "error": "AI Brain module not available. Please ensure all dependencies are installed.",
+            "account_id": account_id,
+            "profile": None,
+        }
+    except Exception as e:
+        logger.exception("Failed to update AI profile", error=str(e))
+        return {
+            "status": "error",
+            "error": f"Failed to update AI profile: {str(e)}",
+            "account_id": account_id,
+            "profile": None,
+        }
+
+
+@router.get("/api/ai/memory/stats")
+async def get_ai_memory_stats(
+    account_id: Optional[str] = None,
+    app: InstaForgeApp = Depends(get_app),
+):
+    """Get AI memory statistics for an account"""
+    try:
+        from src.features.ai_brain import AISettingsService
+        
+        if not account_id:
+            accounts = app.account_service.list_accounts()
+            if not accounts:
+                return {
+                    "status": "error",
+                    "error": "No accounts configured",
+                    "account_id": None,
+                    "stats": None,
+                }
+            account_id = accounts[0].account_id
+        
+        ai_service = AISettingsService()
+        stats = ai_service.get_memory_stats(account_id)
+        
+        return {
+            "status": "success",
+            "account_id": account_id,
+            "stats": stats,
+        }
+    except ImportError as e:
+        logger.error("AI Brain module not available", error=str(e))
+        return {
+            "status": "success",
+            "account_id": account_id,
+            "stats": {
+                "total_users": 0,
+                "total_messages": 0,
+                "users_with_tags": 0,
+            },
+        }
+    except Exception as e:
+        logger.exception("Failed to get AI memory stats", error=str(e))
+        return {
+            "status": "success",
+            "account_id": account_id,
+            "stats": {
+                "total_users": 0,
+                "total_messages": 0,
+                "users_with_tags": 0,
+            },
+        }
+
+
+@router.post("/api/ai/memory/reset")
+async def reset_ai_memory(
+    account_id: Optional[str] = Form(None),
+    user_id: Optional[str] = Form(None),
+    app: InstaForgeApp = Depends(get_app),
+):
+    """Reset AI memory for an account or specific user"""
+    try:
+        from src.features.ai_brain import AISettingsService
+        
+        if not account_id:
+            accounts = app.account_service.list_accounts()
+            if not accounts:
+                return {
+                    "status": "error",
+                    "error": "No accounts configured",
+                    "account_id": None,
+                    "user_id": user_id,
+                }
+            account_id = accounts[0].account_id
+        
+        ai_service = AISettingsService()
+        success = ai_service.reset_memory(account_id, user_id)
+        
+        if not success:
+            return {
+                "status": "error",
+                "error": "Memory not found",
+                "account_id": account_id,
+                "user_id": user_id,
+            }
+        
+        return {
+            "status": "success",
+            "account_id": account_id,
+            "user_id": user_id,
+            "message": "Memory reset successfully",
+        }
+    except ImportError as e:
+        logger.error("AI Brain module not available", error=str(e))
+        return {
+            "status": "error",
+            "error": "AI Brain module not available",
+            "account_id": account_id,
+            "user_id": user_id,
+        }
+    except Exception as e:
+        logger.exception("Failed to reset AI memory", error=str(e))
+        return {
+            "status": "error",
+            "error": f"Failed to reset AI memory: {str(e)}",
+            "account_id": account_id,
+            "user_id": user_id,
         }
 
 

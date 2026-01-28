@@ -16,6 +16,7 @@ from .api import router as api_router, auth_router
 from .cloudflare_helper import start_cloudflare, stop_cloudflare, get_cloudflare_url
 from .instagram_webhook import process_webhook_payload
 from .scheduled_publisher import start_scheduled_publisher, stop_scheduled_publisher
+from .warming_scheduler import start_warming_scheduler, stop_warming_scheduler
 from src.app import InstaForgeApp
 from src.services.token_refresher import start_daily_token_refresh_job, stop_daily_token_refresh_job
 from src.utils.logger import get_logger
@@ -377,6 +378,10 @@ async def startup_event():
         start_scheduled_publisher(instaforge_app, interval_seconds=60)
         # Daily token refresh for OAuth accounts (tokens older than 40 days)
         start_daily_token_refresh_job(instaforge_app, interval_seconds=86400)
+        # Start warming scheduler
+        print("Starting warming scheduler...")
+        start_warming_scheduler(instaforge_app)
+        print("Warming scheduler started - warming actions will run at scheduled time")
     except Exception as e:
         print(f"Warning: Failed to initialize InstaForge app: {e}")
 
@@ -394,6 +399,7 @@ async def shutdown_event():
     if instaforge_app:
         stop_scheduled_publisher()
         stop_daily_token_refresh_job()
+        stop_warming_scheduler()
         if instaforge_app.comment_monitor:
             instaforge_app.comment_monitor.stop_monitoring_all_accounts()
         instaforge_app.shutdown()
@@ -425,6 +431,13 @@ async def logs_page(request: Request):
 async def config_page(request: Request):
     """Configuration page"""
     content = render_template("config.html", {"request": request})
+    return HTMLResponse(content=content)
+
+
+@app.get("/ai-settings", response_class=HTMLResponse)
+async def ai_settings_page(request: Request):
+    """AI Settings page"""
+    content = render_template("ai-settings.html", {"request": request})
     return HTMLResponse(content=content)
 
 

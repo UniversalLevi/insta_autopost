@@ -1,0 +1,876 @@
+{% extends "layout.html" %}
+
+{% block title %}AI Customization - InstaForge{% endblock %}
+{% block page_title %}🤖 AI Customization{% endblock %}
+
+{% block content %}
+<div class="ai-settings-container">
+    <!-- Loading State -->
+    <div id="loading" class="loading-overlay">
+        <div class="loading-spinner"></div>
+        <p>Loading AI profile...</p>
+    </div>
+
+    <!-- Error Message -->
+    <div id="error" class="alert alert-error" style="display: none;"></div>
+
+    <!-- Success Message -->
+    <div id="success" class="alert alert-success" style="display: none;"></div>
+
+    <!-- Main Content -->
+    <div id="mainContent" style="display: none;">
+        <!-- Tabs Navigation -->
+        <div class="tabs-nav">
+            <button class="tab-btn active" onclick="switchTab('business')">
+                <span class="tab-icon">🏢</span> Business Info
+            </button>
+            <button class="tab-btn" onclick="switchTab('personality')">
+                <span class="tab-icon">🎭</span> Personality
+            </button>
+            <button class="tab-btn" onclick="switchTab('rules')">
+                <span class="tab-icon">📋</span> Custom Rules
+            </button>
+            <button class="tab-btn" onclick="switchTab('advanced')">
+                <span class="tab-icon">⚙️</span> Advanced
+            </button>
+            <button class="tab-btn" onclick="switchTab('memory')">
+                <span class="tab-icon">🧠</span> Memory & Stats
+            </button>
+        </div>
+
+        <form id="aiProfileForm">
+            <!-- Business Information Tab -->
+            <div id="tab-business" class="tab-content active">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>🏢 Business Information</h2>
+                        <p class="card-subtitle">Tell the AI about your business so it can represent you accurately</p>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-grid">
+                            <div class="form-group full-width">
+                                <label for="brand_name" class="form-label">
+                                    <span class="label-icon">🏷️</span> Brand Name
+                                </label>
+                                <input type="text" id="brand_name" name="brand_name" class="form-control" 
+                                       placeholder="Your brand or business name">
+                                <small class="form-hint">This replaces "InstaForge" in the AI's context</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="business_type" class="form-label">
+                                    <span class="label-icon">💼</span> Business Type
+                                </label>
+                                <input type="text" id="business_type" name="business_type" class="form-control" 
+                                       placeholder="e.g., E-commerce, SaaS, Consulting">
+                                <small class="form-hint">What type of business are you?</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="location" class="form-label">
+                                    <span class="label-icon">📍</span> Location
+                                </label>
+                                <input type="text" id="location" name="location" class="form-control" 
+                                       placeholder="e.g., India, Online Service">
+                                <small class="form-hint">Where is your business located?</small>
+                            </div>
+
+                            <div class="form-group full-width">
+                                <label for="pricing" class="form-label">
+                                    <span class="label-icon">💰</span> Pricing Information
+                                </label>
+                                <textarea id="pricing" name="pricing" class="form-control" rows="3" 
+                                          placeholder="e.g., Starting at $99/month, Free trial available"></textarea>
+                                <small class="form-hint">How should the AI respond to pricing questions?</small>
+                            </div>
+
+                            <div class="form-group full-width">
+                                <label for="about_business" class="form-label">
+                                    <span class="label-icon">📝</span> About Your Business
+                                </label>
+                                <textarea id="about_business" name="about_business" class="form-control" rows="4" 
+                                          placeholder="Brief description of what you do, your mission, or key differentiators"></textarea>
+                                <small class="form-hint">Help the AI understand your business better</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Personality Tab -->
+            <div id="tab-personality" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>🎭 Personality & Communication Style</h2>
+                        <p class="card-subtitle">Control how the AI communicates with your customers</p>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="tone" class="form-label">
+                                    <span class="label-icon">🎨</span> Communication Tone
+                                </label>
+                                <select id="tone" name="tone" class="form-control">
+                                    <option value="friendly">😊 Friendly (Default)</option>
+                                    <option value="professional">💼 Professional</option>
+                                    <option value="casual">👋 Casual</option>
+                                    <option value="enthusiastic">🚀 Enthusiastic</option>
+                                    <option value="helpful">🤝 Helpful</option>
+                                </select>
+                                <small class="form-hint">How should the AI communicate?</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="language" class="form-label">
+                                    <span class="label-icon">🌐</span> Language
+                                </label>
+                                <select id="language" name="language" class="form-control">
+                                    <option value="en">🇺🇸 English</option>
+                                    <option value="es">🇪🇸 Spanish</option>
+                                    <option value="fr">🇫🇷 French</option>
+                                    <option value="de">🇩🇪 German</option>
+                                    <option value="hi">🇮🇳 Hindi</option>
+                                    <option value="pt">🇵🇹 Portuguese</option>
+                                    <option value="it">🇮🇹 Italian</option>
+                                    <option value="ja">🇯🇵 Japanese</option>
+                                </select>
+                                <small class="form-hint">Primary language for responses</small>
+                            </div>
+                        </div>
+
+                        <div class="info-box">
+                            <div class="info-icon">💡</div>
+                            <div class="info-content">
+                                <strong>Tone Guide:</strong>
+                                <ul>
+                                    <li><strong>Friendly:</strong> Warm, approachable, uses emojis</li>
+                                    <li><strong>Professional:</strong> Formal, business-like, polished</li>
+                                    <li><strong>Casual:</strong> Relaxed, conversational, informal</li>
+                                    <li><strong>Enthusiastic:</strong> Energetic, positive, excited</li>
+                                    <li><strong>Helpful:</strong> Solution-focused, asks clarifying questions</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Custom Rules Tab -->
+            <div id="tab-rules" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>📋 Custom Rules</h2>
+                        <p class="card-subtitle">Define specific behaviors and guidelines for the AI</p>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group">
+                            <label for="custom_rules" class="form-label">
+                                <span class="label-icon">📝</span> Rules (one per line)
+                            </label>
+                            <textarea id="custom_rules" name="custom_rules" class="form-control code-textarea" rows="10" 
+                                      placeholder="Example rules:
+- Always mention our 24/7 support
+- Never discuss competitors
+- Always ask for email before sending resources
+- Use customer's name when available
+- Offer discount code 'WELCOME10' to new customers"></textarea>
+                            <small class="form-hint">Add specific rules for how the AI should behave. One rule per line, starting with "-"</small>
+                        </div>
+
+                        <div class="info-box">
+                            <div class="info-icon">💡</div>
+                            <div class="info-content">
+                                <strong>Tips for Writing Rules:</strong>
+                                <ul>
+                                    <li>Keep rules short and actionable</li>
+                                    <li>Use positive language ("Always do X" vs "Never do Y")</li>
+                                    <li>Be specific about when to apply rules</li>
+                                    <li>Test rules with sample conversations</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Advanced Tab -->
+            <div id="tab-advanced" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>⚙️ Advanced Settings</h2>
+                        <p class="card-subtitle">Fine-tune the AI's behavior with advanced options</p>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group">
+                            <label class="checkbox-label-large">
+                                <input type="checkbox" id="enable_memory" name="enable_memory" checked>
+                                <div class="checkbox-content">
+                                    <div class="checkbox-title">
+                                        <span class="checkbox-icon">🧠</span> Enable Conversation Memory
+                                    </div>
+                                    <div class="checkbox-description">
+                                        The AI will remember previous conversations with users, allowing for context-aware replies and personalized interactions.
+                                    </div>
+                                </div>
+                            </label>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="custom_prompt" class="form-label">
+                                <span class="label-icon">🔧</span> Custom System Prompt (Advanced)
+                            </label>
+                            <textarea id="custom_prompt" name="custom_prompt" class="form-control code-textarea" rows="12" 
+                                      placeholder="Override the default system prompt completely. Use with caution.
+
+Example:
+You are a customer support assistant for [Brand Name].
+Your role is to help customers with their questions.
+Always be polite and professional.
+..."></textarea>
+                            <small class="form-hint warning">⚠️ For advanced users only. This completely replaces the base prompt. Use only if you understand how AI prompts work.</small>
+                        </div>
+
+                        <div class="warning-box">
+                            <div class="warning-icon">⚠️</div>
+                            <div class="warning-content">
+                                <strong>Advanced Feature Warning:</strong>
+                                Custom prompts override all default behavior. Make sure you understand prompt engineering before using this feature. Test thoroughly before deploying.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Memory & Stats Tab -->
+            <div id="tab-memory" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>🧠 Conversation Memory & Statistics</h2>
+                        <p class="card-subtitle">Monitor AI memory usage and conversation data</p>
+                    </div>
+                    <div class="card-body">
+                        <div class="stats-grid">
+                            <div class="stat-card stat-primary">
+                                <div class="stat-icon">👥</div>
+                                <div class="stat-content">
+                                    <div class="stat-value" id="totalUsers">-</div>
+                                    <div class="stat-label">Total Users</div>
+                                </div>
+                            </div>
+                            <div class="stat-card stat-success">
+                                <div class="stat-icon">💬</div>
+                                <div class="stat-content">
+                                    <div class="stat-value" id="totalMessages">-</div>
+                                    <div class="stat-label">Total Messages</div>
+                                </div>
+                            </div>
+                            <div class="stat-card stat-info">
+                                <div class="stat-icon">🏷️</div>
+                                <div class="stat-content">
+                                    <div class="stat-value" id="usersWithTags">-</div>
+                                    <div class="stat-label">Tagged Users</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="memory-actions">
+                            <button type="button" class="btn btn-danger btn-large" onclick="resetMemory()">
+                                <span class="btn-icon">🗑️</span> Reset All Memory
+                            </button>
+                            <small class="form-hint">This will permanently delete all conversation history. This action cannot be undone.</small>
+                        </div>
+
+                        <div class="info-box">
+                            <div class="info-icon">ℹ️</div>
+                            <div class="info-content">
+                                <strong>Memory System:</strong>
+                                <ul>
+                                    <li>Stores up to 50 messages per user</li>
+                                    <li>Auto-tags users based on interests (pricing, location, product, support)</li>
+                                    <li>Includes recent context in AI prompts</li>
+                                    <li>Auto-cleans messages older than 30 days</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="form-actions-bar">
+                <button type="submit" class="btn btn-primary btn-large">
+                    <span class="btn-icon">💾</span> Save All Settings
+                </button>
+                <button type="button" class="btn btn-secondary btn-large" onclick="resetForm()">
+                    <span class="btn-icon">🔄</span> Reset to Defaults
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+let currentProfile = {};
+
+// Tab switching
+function switchTab(tabName) {
+    // Hide all tabs
+    document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // Show selected tab
+    document.getElementById(`tab-${tabName}`).classList.add('active');
+    event.target.closest('.tab-btn').classList.add('active');
+}
+
+// Load profile
+async function loadProfile() {
+    try {
+        const response = await fetch('/api/ai/profile');
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            currentProfile = data.profile;
+            populateForm(data.profile);
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('mainContent').style.display = 'block';
+        } else {
+            // Even on error, show the form with defaults
+            const errorMsg = data.error || 'Failed to load profile';
+            showError(errorMsg);
+            // Still show the form with default values
+            populateForm({
+                brand_name: '',
+                business_type: '',
+                location: '',
+                pricing: '',
+                about_business: '',
+                tone: 'friendly',
+                language: 'en',
+                custom_rules: [],
+                custom_prompt: '',
+                enable_memory: true
+            });
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('mainContent').style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Error loading profile:', error);
+        const errorMsg = error.message || 'Failed to load profile';
+        showError(errorMsg);
+        // Show form with defaults even on error
+        populateForm({
+            brand_name: '',
+            business_type: '',
+            location: '',
+            pricing: '',
+            about_business: '',
+            tone: 'friendly',
+            language: 'en',
+            custom_rules: [],
+            custom_prompt: '',
+            enable_memory: true
+        });
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('mainContent').style.display = 'block';
+    }
+}
+
+function populateForm(profile) {
+    document.getElementById('brand_name').value = profile.brand_name || '';
+    document.getElementById('business_type').value = profile.business_type || '';
+    document.getElementById('location').value = profile.location || '';
+    document.getElementById('pricing').value = profile.pricing || '';
+    document.getElementById('about_business').value = profile.about_business || '';
+    document.getElementById('tone').value = profile.tone || 'friendly';
+    document.getElementById('language').value = profile.language || 'en';
+    document.getElementById('custom_rules').value = Array.isArray(profile.custom_rules) 
+        ? profile.custom_rules.join('\n') 
+        : (profile.custom_rules || '');
+    document.getElementById('custom_prompt').value = profile.custom_prompt || '';
+    document.getElementById('enable_memory').checked = profile.enable_memory !== false;
+}
+
+async function loadMemoryStats() {
+    try {
+        const response = await fetch('/api/ai/memory/stats');
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            document.getElementById('totalUsers').textContent = data.stats.total_users || 0;
+            document.getElementById('totalMessages').textContent = data.stats.total_messages || 0;
+            document.getElementById('usersWithTags').textContent = data.stats.users_with_tags || 0;
+        }
+    } catch (error) {
+        console.error('Error loading memory stats:', error);
+    }
+}
+
+// Form submission
+document.getElementById('aiProfileForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="btn-icon">⏳</span> Saving...';
+    
+    const formData = new FormData();
+    formData.append('brand_name', document.getElementById('brand_name').value);
+    formData.append('business_type', document.getElementById('business_type').value);
+    formData.append('location', document.getElementById('location').value);
+    formData.append('pricing', document.getElementById('pricing').value);
+    formData.append('about_business', document.getElementById('about_business').value);
+    formData.append('tone', document.getElementById('tone').value);
+    formData.append('language', document.getElementById('language').value);
+    formData.append('custom_rules', document.getElementById('custom_rules').value);
+    formData.append('custom_prompt', document.getElementById('custom_prompt').value);
+    formData.append('enable_memory', document.getElementById('enable_memory').checked);
+    
+    try {
+        const response = await fetch('/api/ai/profile/update', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            showSuccess('Settings saved successfully!');
+            loadProfile();
+        } else {
+            showError('Failed to save settings');
+        }
+    } catch (error) {
+        console.error('Error saving profile:', error);
+        showError('Failed to save settings: ' + error.message);
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+    }
+});
+
+function resetForm() {
+    if (confirm('Reset all settings to defaults? This will clear all your customizations.')) {
+        populateForm({
+            brand_name: '',
+            business_type: '',
+            location: '',
+            pricing: '',
+            about_business: '',
+            tone: 'friendly',
+            language: 'en',
+            custom_rules: [],
+            custom_prompt: '',
+            enable_memory: true
+        });
+        showSuccess('Form reset to defaults');
+    }
+}
+
+async function resetMemory() {
+    if (confirm('⚠️ Are you sure you want to reset all conversation memory?\n\nThis will permanently delete all conversation history and cannot be undone.')) {
+        try {
+            const formData = new FormData();
+            const response = await fetch('/api/ai/memory/reset', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                showSuccess('Memory reset successfully!');
+                loadMemoryStats();
+            } else {
+                showError('Failed to reset memory');
+            }
+        } catch (error) {
+            console.error('Error resetting memory:', error);
+            showError('Failed to reset memory: ' + error.message);
+        }
+    }
+}
+
+function showError(message) {
+    const errorDiv = document.getElementById('error');
+    errorDiv.textContent = message;
+    errorDiv.style.display = 'block';
+    setTimeout(() => {
+        errorDiv.style.display = 'none';
+    }, 5000);
+}
+
+function showSuccess(message) {
+    const successDiv = document.getElementById('success');
+    successDiv.textContent = message;
+    successDiv.style.display = 'block';
+    setTimeout(() => {
+        successDiv.style.display = 'none';
+    }, 3000);
+}
+
+// Initialize
+loadProfile();
+loadMemoryStats();
+setInterval(loadMemoryStats, 30000); // Refresh stats every 30 seconds
+</script>
+
+<style>
+.ai-settings-container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+/* Loading Overlay */
+.loading-overlay {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem;
+    text-align: center;
+}
+
+.loading-spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid var(--border);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 1rem;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Alerts */
+.alert {
+    padding: 1rem 1.5rem;
+    border-radius: 0.5rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.alert-error {
+    background: #FEE2E2;
+    color: #991B1B;
+    border: 1px solid #FCA5A5;
+}
+
+.alert-success {
+    background: #D1FAE5;
+    color: #065F46;
+    border: 1px solid #6EE7B7;
+}
+
+/* Tabs */
+.tabs-nav {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+    border-bottom: 2px solid var(--border);
+    overflow-x: auto;
+}
+
+.tab-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem 1.5rem;
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.tab-btn:hover {
+    color: var(--primary);
+    background: rgba(37, 99, 235, 0.05);
+}
+
+.tab-btn.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+    background: rgba(37, 99, 235, 0.05);
+}
+
+.tab-icon {
+    font-size: 1.2rem;
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* Card Enhancements */
+.card-header {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.card-header h2 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.5rem;
+    color: var(--text-main);
+}
+
+.card-subtitle {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    margin: 0;
+}
+
+/* Form Grid */
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+}
+
+.form-group.full-width {
+    grid-column: 1 / -1;
+}
+
+.form-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: var(--text-main);
+}
+
+.label-icon {
+    font-size: 1.1rem;
+}
+
+.form-hint {
+    display: block;
+    margin-top: 0.5rem;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+}
+
+.form-hint.warning {
+    color: var(--warning);
+}
+
+/* Checkbox Large */
+.checkbox-label-large {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1.5rem;
+    background: var(--bg-main);
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.checkbox-label-large:hover {
+    background: #E5E7EB;
+}
+
+.checkbox-label-large input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    margin-top: 0.25rem;
+    cursor: pointer;
+}
+
+.checkbox-content {
+    flex: 1;
+}
+
+.checkbox-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: var(--text-main);
+}
+
+.checkbox-icon {
+    font-size: 1.2rem;
+}
+
+.checkbox-description {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+/* Code Textarea */
+.code-textarea {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+
+/* Info & Warning Boxes */
+.info-box, .warning-box {
+    display: flex;
+    gap: 1rem;
+    padding: 1.25rem;
+    border-radius: 0.5rem;
+    margin-top: 1.5rem;
+}
+
+.info-box {
+    background: #EFF6FF;
+    border: 1px solid #BFDBFE;
+}
+
+.warning-box {
+    background: #FEF3C7;
+    border: 1px solid #FDE68A;
+}
+
+.info-icon, .warning-icon {
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
+.info-content, .warning-content {
+    flex: 1;
+    color: var(--text-main);
+}
+
+.info-content ul, .warning-content ul {
+    margin: 0.5rem 0 0 1.5rem;
+    padding: 0;
+}
+
+.info-content li, .warning-content li {
+    margin: 0.25rem 0;
+}
+
+/* Stats Grid */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.stat-card {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 1.5rem;
+    background: white;
+    border-radius: 0.75rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}
+
+.stat-icon {
+    font-size: 2.5rem;
+    flex-shrink: 0;
+}
+
+.stat-content {
+    flex: 1;
+}
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
+
+.stat-label {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.stat-primary .stat-value { color: var(--primary); }
+.stat-success .stat-value { color: var(--success); }
+.stat-info .stat-value { color: #3B82F6; }
+
+/* Memory Actions */
+.memory-actions {
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border);
+}
+
+.btn-large {
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+}
+
+.btn-icon {
+    margin-right: 0.5rem;
+}
+
+/* Form Actions Bar */
+.form-actions-bar {
+    position: sticky;
+    bottom: 0;
+    background: white;
+    padding: 1.5rem;
+    margin: 2rem -2rem -2rem -2rem;
+    border-top: 2px solid var(--border);
+    display: flex;
+    gap: 1rem;
+    box-shadow: 0 -4px 6px rgba(0,0,0,0.05);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .tabs-nav {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+    }
+    
+    .tab-btn {
+        padding: 0.75rem 1rem;
+        font-size: 0.875rem;
+    }
+    
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .form-actions-bar {
+        flex-direction: column;
+    }
+}
+</style>
+{% endblock %}

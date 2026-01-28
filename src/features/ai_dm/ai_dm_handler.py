@@ -17,6 +17,14 @@ from tenacity import (
 from ...utils.logger import get_logger
 from .ai_dm_tracking import AIDMTracking
 
+# Optional AI Brain integration (backward compatible)
+try:
+    from ..ai_brain import AISettingsService
+    AI_BRAIN_AVAILABLE = True
+except ImportError:
+    AI_BRAIN_AVAILABLE = False
+    AISettingsService = None
+
 load_dotenv()
 
 logger = get_logger(__name__)
@@ -55,6 +63,16 @@ class AIDMHandler:
         self._model = model
         self._client = None
         self.tracking = AIDMTracking()
+        
+        # Optional AI Brain integration
+        self.ai_brain = None
+        if AI_BRAIN_AVAILABLE:
+            try:
+                self.ai_brain = AISettingsService()
+                logger.info("AI Brain integration enabled")
+            except Exception as e:
+                logger.warning("AI Brain initialization failed", error=str(e))
+                self.ai_brain = None
         
         if self._api_key:
             try:
@@ -176,8 +194,58 @@ class AIDMHandler:
             message_preview=message[:100] + ("..." if len(message) > 100 else ""),
         )
         
-        # System prompt (exactly as specified)
-        system_prompt = """You are a friendly, professional Instagram DM assistant for InstaForge.
+        # Build system prompt - use AI Brain if available, otherwise use default
+        if self.ai_brain:
+            try:
+                system_prompt = self.ai_brain.build_prompt(
+                    account_id=account_id,
+                    user_id=user_id,
+                    message=message,
+                )
+                logger.debug(
+                    "AI_DM_REPLY",
+                    action="using_custom_prompt",
+                    account_id=account_id,
+                    user_id=user_id,
+                )
+            except Exception as e:
+                logger.warning(
+                    "AI_DM_REPLY",
+                    action="prompt_build_failed",
+                    error=str(e),
+                    account_id=account_id,
+                    user_id=user_id,
+                )
+                # Fallback to default prompt
+                system_prompt = """You are a friendly, professional Instagram DM assistant for InstaForge.
+
+Rules:
+- Sound human
+- Be polite
+- Be short and clear
+- Never say you are AI
+- Never mention OpenAI
+- Never say you are a bot
+- Use light emojis when appropriate
+
+Context:
+Brand: InstaForge
+Location: India
+Service: Instagram automation and growth tools
+
+If user greets → greet back
+If user asks price → explain briefly
+If user asks location → say India, online service
+If confused → help politely
+If rude → stay calm
+
+Never hallucinate.
+If unsure → say you will check.
+
+Always stay in character."""
+        else:
+            # Default system prompt (original behavior)
+            system_prompt = """You are a friendly, professional Instagram DM assistant for InstaForge.
 
 Rules:
 - Sound human
@@ -238,6 +306,30 @@ Always stay in character."""
             
             # Record successful reply
             self.tracking.record_reply_sent(account_id, user_id)
+            
+            # Store conversation in AI Brain memory if available
+            if self.ai_brain:
+                try:
+                    self.ai_brain.store_conversation(
+                        account_id=account_id,
+                        user_id=user_id,
+                        user_message=message,
+                        ai_reply=reply,
+                    )
+                    logger.debug(
+                        "AI_DM_REPLY",
+                        action="conversation_stored",
+                        account_id=account_id,
+                        user_id=user_id,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "AI_DM_REPLY",
+                        action="memory_store_failed",
+                        error=str(e),
+                        account_id=account_id,
+                        user_id=user_id,
+                    )
             
             logger.info(
                 "AI_DM_REPLY",
