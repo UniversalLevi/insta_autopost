@@ -25,7 +25,7 @@ from .models import (
     PublishedPostResponse,
 )
 from src.models.post import PostMedia, Post, PostStatus
-from src.models.account import Account, ProxyConfig, WarmingConfig, CommentToDMConfig
+from src.models.account import Account, ProxyConfig, WarmingConfig, CommentToDMConfig, AIDMConfig
 from src.app import InstaForgeApp
 from src.utils.config import config_manager, Settings
 from src.services.scheduled_posts_store import add_scheduled
@@ -995,6 +995,122 @@ async def check_file(filename: str):
         }
 
 
+@router.post("/test/ai-reply")
+async def test_ai_reply(
+    message: str = Form(...),
+    account_id: Optional[str] = Form(None),
+    user_id: Optional[str] = Form("test_user_123"),
+    app: InstaForgeApp = Depends(get_app),
+):
+    """
+    Test endpoint for AI DM auto-reply feature.
+    
+    Args:
+        message: Test message to send to AI
+        account_id: Optional account ID (uses first account if not provided)
+        user_id: Optional user ID for testing (defaults to test_user_123)
+        
+    Returns:
+        AI-generated reply or error message
+    """
+    try:
+        from src.features.ai_dm import AIDMHandler
+        
+        # Get account ID
+        if not account_id:
+            accounts = app.account_service.list_accounts()
+            if not accounts:
+                raise HTTPException(status_code=404, detail="No accounts configured")
+            account_id = accounts[0].account_id
+        
+        # Get account username
+        account = app.account_service.get_account(account_id)
+        account_username = account.username if account else None
+        
+        # Check AI DM config
+        ai_dm_enabled = False
+        if account and hasattr(account, 'ai_dm') and account.ai_dm:
+            ai_dm_enabled = account.ai_dm.enabled
+        
+        # Initialize handler
+        ai_handler = AIDMHandler()
+        
+        if not ai_handler.is_available():
+            return {
+                "status": "error",
+                "error": "OpenAI API not configured. Set OPENAI_API_KEY in .env",
+                "reply": None,
+                "ai_dm_enabled": ai_dm_enabled,
+            }
+        
+        # Generate reply
+        reply = ai_handler.get_ai_reply(
+            message=message,
+            account_id=account_id,
+            user_id=user_id or "test_user_123",
+            account_username=account_username,
+        )
+        
+        return {
+            "status": "success",
+            "message": message,
+            "reply": reply,
+            "account_id": account_id,
+            "user_id": user_id,
+            "account_username": account_username,
+            "ai_dm_enabled": ai_dm_enabled,
+        }
+    except Exception as e:
+        logger.exception("AI reply test failed", error=str(e))
+        return {
+            "status": "error",
+            "error": str(e),
+            "reply": None,
+        }
+
+
+@router.get("/test/ai-dm-status")
+async def test_ai_dm_status(app: InstaForgeApp = Depends(get_app)):
+    """
+    Diagnostic endpoint to check AI DM configuration and webhook setup.
+    
+    Returns:
+        Status of AI DM feature for all accounts
+    """
+    try:
+        from src.features.ai_dm import AIDMHandler
+        
+        accounts = app.account_service.list_accounts()
+        ai_handler = AIDMHandler()
+        
+        status = {
+            "openai_configured": ai_handler.is_available(),
+            "accounts": [],
+        }
+        
+        for account in accounts:
+            ai_dm_enabled = False
+            if hasattr(account, 'ai_dm') and account.ai_dm:
+                ai_dm_enabled = account.ai_dm.enabled
+            
+            account_status = {
+                "account_id": account.account_id,
+                "username": account.username,
+                "ai_dm_enabled": ai_dm_enabled,
+                "instagram_business_id": getattr(account, 'instagram_business_id', None),
+                "has_ai_dm_config": hasattr(account, 'ai_dm') and account.ai_dm is not None,
+            }
+            status["accounts"].append(account_status)
+        
+        return status
+    except Exception as e:
+        logger.exception("AI DM status check failed", error=str(e))
+        return {
+            "status": "error",
+            "error": str(e),
+        }
+
+
 @router.get("/webhooks/callback-url")
 async def get_webhook_callback_url():
     """
@@ -1005,18 +1121,23 @@ async def get_webhook_callback_url():
     """
     from .cloudflare_helper import get_cloudflare_url
     verify_token = os.environ.get("WEBHOOK_VERIFY_TOKEN", "my_test_token_for_instagram_verification")
-    base = get_cloudflare_url()
-    if base:
-        callback_url = f"{base.rstrip('/')}/webhooks/instagram"
-        return {
-            "callback_url": callback_url,
-            "verify_token": verify_token,
-            "note": "In Meta app: Callback URL = callback_url above; Verify token = verify_token above. Do NOT use /api/webhooks/callback-url as Callback URL.",
-        }
+    
+    # Check if BASE_URL is set (production)
+    BASE_URL = os.getenv("BASE_URL", "").strip().rstrip("/")
+    if BASE_URL:
+        callback_url = f"{BASE_URL}/webhooks/instagram"
+    else:
+        base = get_cloudflare_url()
+        if base:
+            callback_url = f"{base.rstrip('/')}/webhooks/instagram"
+        else:
+            callback_url = None
+    
     return {
-        "callback_url": None,
+        "callback_url": callback_url or "https://veilforce.com/webhooks/instagram",
         "verify_token": verify_token,
-        "note": "Start the app to create a Cloudflare tunnel, then GET this again for callback_url.",
+        "production_url": "https://veilforce.com/webhooks/instagram",
+        "note": "In Meta app: Callback URL = production_url above; Verify token = verify_token above. Do NOT use /api/webhooks/callback-url as Callback URL.",
     }
 
 

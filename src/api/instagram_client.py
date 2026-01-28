@@ -246,9 +246,29 @@ class InstagramClient:
         video_url = clean_url(video_url)
         
         # Verify media URL is accessible before sending to Instagram
+        # NOTE: For production domains, we're more lenient - Instagram will verify anyway
         media_url = image_url or video_url
         if media_url:
-            self._verify_media_url(media_url)
+            # Skip verification for production domains (Instagram will verify)
+            # Only verify for development URLs to catch obvious mistakes
+            is_production = not any(dev in media_url.lower() for dev in [
+                "localhost", "127.0.0.1", "trycloudflare.com", "ngrok", "127.0.0.1"
+            ])
+            
+            if not is_production:
+                # For dev URLs, verify strictly
+                self._verify_media_url(media_url)
+            else:
+                # For production, do a quick check but don't fail on minor issues
+                try:
+                    self._verify_media_url(media_url)
+                except InstagramAPIError as e:
+                    # Log but don't fail - Instagram will verify and return clear error if needed
+                    logger.warning(
+                        "Media URL verification had issues, but continuing - Instagram will verify",
+                        url=media_url,
+                        error=str(e),
+                    )
         
         params = {"caption": caption}
         
@@ -538,12 +558,22 @@ class InstagramClient:
                 error_code=9004,
             )
         except requests.exceptions.RequestException as e:
-            raise InstagramAPIError(
-                f"Media URL is not accessible to Instagram's crawler: {str(e)}. "
-                f"Instagram will reject this with error 9004. "
-                f"URL: {url}",
-                error_code=9004,
-            )
+            # Check if it's a connection error (DNS, network, etc.)
+            error_str = str(e).lower()
+            if "dns" in error_str or "resolve" in error_str or "connection" in error_str:
+                raise InstagramAPIError(
+                    f"Media URL is not accessible: {str(e)}. "
+                    f"This usually means the domain is unreachable or DNS is failing. "
+                    f"URL: {url}",
+                    error_code=9004,
+                )
+            else:
+                raise InstagramAPIError(
+                    f"Media URL verification failed: {str(e)}. "
+                    f"Instagram will verify the URL itself when posting. "
+                    f"URL: {url}",
+                    error_code=9004,
+                )
         except InstagramAPIError:
             # Re-raise our custom errors
             raise

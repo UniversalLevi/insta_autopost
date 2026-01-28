@@ -69,20 +69,6 @@ async def serve_upload_file_options(filename: str):
         }
     )
 
-@app.options("/uploads/{filename:path}")
-async def serve_upload_file_options(filename: str):
-    """Handle CORS preflight requests for uploads"""
-    from fastapi.responses import Response
-    return Response(
-        status_code=200,
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-            "Access-Control-Allow-Headers": "*",
-            "Access-Control-Max-Age": "3600",
-        }
-    )
-
 @app.get("/uploads/{filename:path}")
 @app.head("/uploads/{filename:path}")
 async def serve_upload_file(filename: str, request: Request):
@@ -198,6 +184,12 @@ async def serve_upload_file(filename: str, request: Request):
     )
     # Explicitly prevent cookie setting
     response.delete_cookie = lambda *args, **kwargs: None
+    
+    # CRITICAL: Ensure no Set-Cookie header is sent (Instagram's bot doesn't send cookies)
+    # Also ensure we're not redirecting
+    if hasattr(response, 'headers') and "Set-Cookie" in response.headers:
+        del response.headers["Set-Cookie"]
+    
     return response
 
 # Templates
@@ -223,27 +215,134 @@ async def webhook_instagram_verify(request: Request):
     Meta sends GET with hub.mode, hub.verify_token, hub.challenge.
     Echo hub.challenge if verify_token matches. Use this URL as Callback URL in your app.
     """
+    from src.utils.logger import get_logger
+    webhook_logger = get_logger(__name__)
+    
     mode = request.query_params.get("hub.mode")
     token = request.query_params.get("hub.verify_token")
     challenge = request.query_params.get("hub.challenge")
+    
+    webhook_logger.info(
+        "Instagram webhook verification request",
+        mode=mode,
+        has_token=bool(token),
+        token_length=len(token) if token else 0,
+        expected_token=WEBHOOK_VERIFY_TOKEN,
+        token_matches=(token == WEBHOOK_VERIFY_TOKEN) if token else False,
+        has_challenge=bool(challenge),
+        url=str(request.url),
+    )
+    
     if mode == "subscribe" and token == WEBHOOK_VERIFY_TOKEN and challenge:
+        webhook_logger.info(
+            "Instagram webhook verification successful",
+            challenge_length=len(challenge),
+        )
         return PlainTextResponse(content=challenge)
+    
+    webhook_logger.warning(
+        "Instagram webhook verification failed",
+        mode=mode,
+        token_provided=bool(token),
+        token_matches=(token == WEBHOOK_VERIFY_TOKEN) if token else False,
+        has_challenge=bool(challenge),
+    )
+    webhook_logger.warning(
+        "Instagram webhook verification failed",
+        mode=mode,
+        token_provided=bool(token),
+        token_matches=(token == WEBHOOK_VERIFY_TOKEN) if token else False,
+        has_challenge=bool(challenge),
+        provided_token_preview=token[:10] + "..." if token and len(token) > 10 else token,
+        expected_token_preview=WEBHOOK_VERIFY_TOKEN[:10] + "..." if len(WEBHOOK_VERIFY_TOKEN) > 10 else WEBHOOK_VERIFY_TOKEN,
+    )
     raise HTTPException(status_code=403, detail="Verification failed")
 
 
 @app.post("/webhooks/instagram")
 async def webhook_instagram_events(request: Request):
     """Webhook verification (GET) is separate. POST: receive events, log payloads, forward comments/messages."""
+    from src.utils.logger import get_logger
+    import json
+    webhook_logger = get_logger(__name__)
+    
+    # Log immediately when request arrives - this is critical for debugging
+    # Also print to console for immediate visibility
+    print("=" * 80)
+    print(f"[WEBHOOK] POST request received at {request.url}")
+    print(f"[WEBHOOK] Client: {request.client.host if request.client else 'Unknown'}")
+    print("=" * 80)
+    
+    webhook_logger.info(
+        "=== WEBHOOK POST RECEIVED ===",
+        method=request.method,
+        url=str(request.url),
+        client_host=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        content_type=request.headers.get("content-type"),
+    )
+    
+    # Try to read body
     try:
-        body = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON")
-    try:
-        process_webhook_payload(body, instaforge_app)
+        body_bytes = await request.body()
+        print(f"[WEBHOOK] Body size: {len(body_bytes)} bytes")
+        body_preview = body_bytes[:500].decode('utf-8', errors='ignore') if body_bytes else None
+        print(f"[WEBHOOK] Body preview: {body_preview}")
+        
+        webhook_logger.info(
+            "Webhook body received",
+            body_size=len(body_bytes),
+            body_preview=body_preview,
+        )
+        
+        # Parse JSON
+        if body_bytes:
+            body = json.loads(body_bytes)
+        else:
+            body = {}
+            
+        print(f"[WEBHOOK] Body parsed: {type(body).__name__}")
+        if isinstance(body, dict):
+            print(f"[WEBHOOK] Keys: {list(body.keys())}")
+            print(f"[WEBHOOK] Object: {body.get('object')}")
+            if body.get("entry"):
+                print(f"[WEBHOOK] Entry count: {len(body.get('entry', []))}")
+        
+        webhook_logger.info(
+            "Instagram webhook body parsed",
+            body_type=type(body).__name__,
+            body_keys=list(body.keys()) if isinstance(body, dict) else None,
+            has_object=bool(body.get("object") if isinstance(body, dict) else False),
+            object_type=body.get("object") if isinstance(body, dict) else None,
+        )
+    except json.JSONDecodeError as e:
+        webhook_logger.error(
+            "Instagram webhook JSON parse failed",
+            error=str(e),
+            body_preview=body_bytes[:500].decode('utf-8', errors='ignore') if 'body_bytes' in locals() else None,
+        )
+        return JSONResponse(status_code=400, content={"status": "error", "detail": "Invalid JSON"})
     except Exception as e:
-        from src.utils.logger import get_logger
-        get_logger(__name__).exception("Instagram webhook processing error", error=str(e))
-    return {"status": "ok"}
+        webhook_logger.exception("Instagram webhook body read failed", error=str(e))
+        return JSONResponse(status_code=500, content={"status": "error", "detail": str(e)})
+    
+    # Process webhook
+    try:
+        if instaforge_app is None:
+            print("[WEBHOOK] ERROR: InstaForge app not initialized")
+            webhook_logger.error("InstaForge app not initialized")
+            return JSONResponse(status_code=500, content={"status": "error", "detail": "App not initialized"})
+        
+        print("[WEBHOOK] Processing webhook payload...")
+        process_webhook_payload(body, instaforge_app)
+        print("[WEBHOOK] Processing completed successfully")
+        webhook_logger.info("Instagram webhook processing completed successfully")
+    except Exception as e:
+        print(f"[WEBHOOK] ERROR during processing: {e}")
+        webhook_logger.exception("Instagram webhook processing error", error=str(e))
+    
+    print("[WEBHOOK] Returning OK response")
+    return JSONResponse(status_code=200, content={"status": "ok"})
 
 # Global InstaForge app instance
 instaforge_app: Optional[InstaForgeApp] = None

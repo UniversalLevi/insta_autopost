@@ -580,47 +580,69 @@ class CommentToDMService:
             )
             return result
         
-        # Get DM configuration
+        # Get post-specific configuration FIRST (post-specific overrides account defaults)
+        post_config = self.post_dm_config.get_post_dm_config(account_id, media_id)
+        
+        # Get DM configuration (account-level defaults)
         dm_config = self._get_dm_config(account_id)
-        if not dm_config or not dm_config.get("enabled"):
+        
+        # Check if automation should run:
+        # 1. If post has specific config with a link, allow it (even if account-level is disabled)
+        # 2. Otherwise, require account-level to be enabled
+        has_post_specific_link = post_config and post_config.get("file_url")
+        account_enabled = dm_config and dm_config.get("enabled")
+        
+        if not has_post_specific_link and not account_enabled:
             result["reason"] = "automation_disabled"
             logger.debug(
-                "Automation disabled",
+                "Automation disabled - no post-specific config and account-level disabled",
                 account_id=account_id,
                 comment_id=comment_id,
+                has_post_config=post_config is not None,
             )
             return result
-        
-        # Get post-specific configuration
-        post_config = self.post_dm_config.get_post_dm_config(account_id, media_id)
         
         logger.info(
             "Post DM config lookup",
             account_id=account_id,
             media_id=media_id,
             has_post_config=post_config is not None,
-            post_file_url=post_config.get("file_url") if post_config else None,
+            post_file_url=post_config.get("file_url")[:50] + "..." if post_config and post_config.get("file_url") else None,
+            post_trigger_mode=post_config.get("trigger_mode") if post_config else None,
+            post_trigger_word=post_config.get("trigger_word") if post_config else None,
             ai_enabled=post_config.get("ai_enabled", False) if post_config else False,
+            account_enabled=account_enabled,
         )
         
         # Determine link to send (Post specific > Account global)
         link_to_send = None
         if post_config and post_config.get("file_url"):
             link_to_send = post_config.get("file_url")
-            logger.debug(
+            logger.info(
                 "Using post-specific link",
                 account_id=account_id,
                 media_id=media_id,
                 link=link_to_send[:50] if link_to_send else None,
             )
-        else:
+        elif dm_config:
             link_to_send = dm_config.get("link_to_send")
-            logger.debug(
+            logger.info(
                 "Using account-global link",
                 account_id=account_id,
                 media_id=media_id,
                 has_link=link_to_send is not None,
             )
+        
+        # If no link is available, skip
+        if not link_to_send:
+            result["reason"] = "no_link_configured"
+            logger.debug(
+                "No link configured for DM",
+                account_id=account_id,
+                media_id=media_id,
+                has_post_config=post_config is not None,
+            )
+            return result
         
         # Determine trigger logic (Post specific > Account global)
         trigger_keyword = "AUTO"
@@ -629,20 +651,26 @@ class CommentToDMService:
             # Use post-specific trigger settings
             mode = post_config.get("trigger_mode")
             if mode == "KEYWORD":
-                trigger_keyword = post_config.get("trigger_word", "")
+                trigger_keyword = post_config.get("trigger_word", "") or ""
             else:
                 trigger_keyword = "AUTO"
             
-            logger.debug(
+            logger.info(
                 "Using post-specific trigger config", 
                 account_id=account_id, 
                 media_id=media_id,
                 mode=mode, 
                 keyword=trigger_keyword
             )
-        else:
+        elif dm_config:
             # Fallback to account global settings
             trigger_keyword = dm_config.get("trigger_keyword", "AUTO")
+            logger.info(
+                "Using account-global trigger config",
+                account_id=account_id,
+                media_id=media_id,
+                keyword=trigger_keyword
+            )
         
         if not self._should_trigger(comment_text, trigger_keyword):
             result["reason"] = "trigger_keyword_not_matched"

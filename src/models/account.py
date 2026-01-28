@@ -51,6 +51,21 @@ class CommentToDMConfig(BaseModel):
         frozen = True
 
 
+class AIDMConfig(BaseModel):
+    """
+    AI DM Auto Reply configuration.
+    
+    Features:
+    - Automated AI-powered replies to incoming DMs
+    - Rate limiting (max 10 replies per user per day)
+    - Natural, human-like responses using OpenAI
+    """
+    enabled: bool = False  # Enable/disable AI DM auto-reply
+    
+    class Config:
+        frozen = True
+
+
 class Account(BaseModel):
     """Instagram account model"""
     account_id: str
@@ -61,6 +76,7 @@ class Account(BaseModel):
     proxy: ProxyConfig = Field(default_factory=ProxyConfig)
     warming: WarmingConfig = Field(default_factory=WarmingConfig)
     comment_to_dm: Optional[CommentToDMConfig] = None  # Comment-to-DM automation config
+    ai_dm: Optional[AIDMConfig] = None  # AI DM auto-reply config
     # OAuth-connected account fields (optional; manual tokens omit these)
     expires_at: Optional[str] = None
     instagram_business_id: Optional[str] = None

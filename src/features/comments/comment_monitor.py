@@ -154,21 +154,44 @@ class CommentMonitor:
                         if c.get("username", "").lower() != account.username.lower()
                     ]
                     
+                    # Check if DM automation should run for this post
+                    # Priority: Post-specific config > Account-level config
+                    post_config = None
+                    if self.comment_to_dm_service:
+                        post_config = self.comment_to_dm_service.post_dm_config.get_post_dm_config(account_id, media_id)
+                    
+                    # DM should run if:
+                    # 1. Post has specific config with a link (even if account-level is disabled)
+                    # 2. OR account-level is enabled
+                    has_post_specific_link = post_config and post_config.get("file_url")
+                    should_run_dm = self.comment_to_dm_service and (has_post_specific_link or is_dm_enabled)
+                    
                     # Determine which comments comment-to-DM will handle
                     comments_for_dm = []
                     comments_for_auto_reply = []
                     
-                    if self.comment_to_dm_service and is_dm_enabled:
+                    if should_run_dm:
                         # Get DM config to check trigger keyword
                         dm_config = self.comment_to_dm_service._get_dm_config(account_id)
-                        post_config = self.comment_to_dm_service.post_dm_config.get_post_dm_config(account_id, media_id)
                         
                         # Determine trigger (post-specific > account global)
                         trigger_keyword = "AUTO"
                         if post_config and post_config.get("trigger_mode") == "KEYWORD":
-                            trigger_keyword = post_config.get("trigger_word", "")
+                            trigger_keyword = post_config.get("trigger_word", "") or ""
+                            logger.info(
+                                "Using post-specific trigger keyword",
+                                account_id=account_id,
+                                media_id=media_id,
+                                keyword=trigger_keyword
+                            )
                         elif dm_config:
                             trigger_keyword = dm_config.get("trigger_keyword", "AUTO")
+                            logger.info(
+                                "Using account-global trigger keyword",
+                                account_id=account_id,
+                                media_id=media_id,
+                                keyword=trigger_keyword
+                            )
                         
                         # Split comments: those matching DM trigger go to DM, others to auto-reply
                         for comment in other_users_comments:
