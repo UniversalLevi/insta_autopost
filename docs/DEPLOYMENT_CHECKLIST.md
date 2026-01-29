@@ -97,6 +97,7 @@ Use this checklist before deploying to production. Verify each feature works for
 |-------|--------|--------|
 | `data/accounts.yaml` – no sensitive tokens in version control | ☐ | Use env or secrets in production |
 | `META_APP_ID`, `META_APP_SECRET`, `META_REDIRECT_URI` set for OAuth | ☐ | Required for "Connect with Meta" |
+| `BASE_URL` set to your public domain (e.g. `https://veilforce.com`) | ☐ | Required so uploads and webhook URL work; see docs/VEILFORCE_DEPLOYMENT.md if app not running on your domain |
 | `OPENAI_API_KEY` set if AI DM or AI customization is used | ☐ | |
 | Webhook URL (if used) is HTTPS and reachable by Meta | ☐ | |
 

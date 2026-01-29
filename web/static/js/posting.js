@@ -83,18 +83,10 @@ function setMediaType(type) {
     // Update video URL warning
     updateVideoUrlWarning();
     
-    // Auto-enable "Post by URL" for video/reels with helpful message
-    if ((type === 'video' || type === 'reels') && !document.getElementById('post-by-url-toggle').checked) {
-        const shouldEnable = confirm(
-            `For ${type} posts, "Post by URL" is recommended.\n\n` +
-            `✅ Use Cloudinary, S3, or Firebase Storage URLs\n` +
-            `❌ Avoid Cloudflare tunnels/ngrok (unreliable)\n\n` +
-            `Enable "Post by URL" now?`
-        );
-        if (shouldEnable) {
-            document.getElementById('post-by-url-toggle').checked = true;
-            togglePostByUrl();
-        }
+    // Show Video & Reels note when Video or Reels is selected (same flow as posts: upload from device)
+    const videoReelsNote = document.getElementById('video-reels-note');
+    if (videoReelsNote) {
+        videoReelsNote.style.display = (type === 'video' || type === 'reels') ? 'block' : 'none';
     }
 }
 
@@ -214,25 +206,27 @@ async function submitPost() {
         }
         for (const u of urls) {
             if (!u.startsWith('https://')) {
-                alert('All URLs must be HTTPS. Use Cloudinary, Imgur, S3, etc.');
+                alert('All URLs must be HTTPS. For your own server, ensure BASE_URL is set to your public HTTPS domain.');
                 return;
             }
-            // Check for unreliable hosts (especially for video/reels)
+            // Check if URL is from same origin (own server) - allow it
+            try {
+                const urlObj = new URL(u);
+                const currentHost = window.location.hostname;
+                const urlHost = urlObj.hostname;
+                const isSameOrigin = urlHost === currentHost || urlHost.endsWith('.' + currentHost) || currentHost.endsWith('.' + urlHost);
+                
+                // If same-origin, allow it (no blocking)
+                if (isSameOrigin) {
+                    continue;
+                }
+            } catch (e) {
+                // Invalid URL format, continue to check below
+            }
+            
+            // Block localhost/tunnel URLs (use Upload Media instead so file goes to your server)
             if (/localhost|127\.0\.0\.1|trycloudflare\.com|ngrok/i.test(u)) {
-                const mediaTypeName = (mediaType === 'reels') ? 'Reels' : (mediaType === 'video') ? 'Video' : 'Media';
-                alert(
-                    `⚠️ ${mediaTypeName} posts require reliable hosting!\n\n` +
-                    `❌ DO NOT USE:\n` +
-                    `• Cloudflare tunnels (trycloudflare.com)\n` +
-                    `• Ngrok\n` +
-                    `• Localhost URLs\n\n` +
-                    `✅ USE INSTEAD:\n` +
-                    `• Cloudinary (https://cloudinary.com) - Recommended\n` +
-                    `• AWS S3 (with public access)\n` +
-                    `• Firebase Storage\n` +
-                    `• Imgur (for smaller files)\n\n` +
-                    `Upload your file to one of these services and use the direct HTTPS URL.`
-                );
+                alert('Use "Upload Media" above to upload from your device — the file will be stored on your server and published to Instagram.');
                 return;
             }
         }
@@ -255,19 +249,6 @@ async function submitPost() {
         }
         if (mediaType !== 'carousel' && uploadedFiles.length > 1) {
             alert(`Single ${mediaType} post can only have 1 file. Use Carousel for multiple.`);
-            return;
-        }
-    }
-
-    // Warn if scheduling a video via upload (Cloudflare tunnels are unreliable for videos)
-    const scheduledTime = document.getElementById('scheduled-time').value;
-    if (!postByUrl && scheduledTime && (mediaType === 'video' || mediaType === 'reels')) {
-        const proceed = confirm(
-            '⚠️ WARNING: Scheduling videos via upload may fail due to Cloudflare tunnel limitations.\n\n' +
-            'For reliable video posting, use "Post by URL" with an external host (Cloudinary, S3, etc.).\n\n' +
-            'Continue anyway?'
-        );
-        if (!proceed) {
             return;
         }
     }

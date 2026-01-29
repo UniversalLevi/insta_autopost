@@ -2,6 +2,16 @@ import uvicorn
 import os
 import sys
 import signal
+from pathlib import Path
+
+# Load .env before reading PORT/HOST/ENVIRONMENT
+try:
+    from dotenv import load_dotenv
+    env_path = Path(__file__).resolve().parent / ".env"
+    if env_path.exists():
+        load_dotenv(env_path)
+except ImportError:
+    pass
 
 if __name__ == "__main__":
     """

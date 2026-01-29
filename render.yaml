@@ -12,6 +12,7 @@ services:
       - key: WEB_HOST
         value: 0.0.0.0
       # Add these in Render dashboard under Environment Variables:
+      # - BASE_URL (e.g. https://veilforce.com or https://your-app.onrender.com)
       # - META_APP_ID
       # - META_APP_SECRET
       # - OPENAI_API_KEY

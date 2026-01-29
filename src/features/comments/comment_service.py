@@ -142,11 +142,11 @@ class CommentService:
         client = self.account_service.get_client(account_id)
         
         try:
-            # Reply to comment; Instagram API expects message as query param
+            # Reply to comment; Instagram API expects message in data (not params)
             result = client._make_request(
                 "POST",
                 f"{comment_id}/replies",
-                params={"message": reply_text},
+                data={"message": reply_text},  # Use data, not params
             )
             
             logger.info(
@@ -156,6 +156,7 @@ class CommentService:
                 media_id=media_id,
                 reply_length=len(reply_text),
                 reply_preview=reply_text[:50],
+                reply_id=result.get("id") if isinstance(result, dict) else None,
             )
             
             # Track processed comment

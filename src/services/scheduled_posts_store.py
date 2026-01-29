@@ -89,7 +89,15 @@ def get_due_posts() -> List[Dict[str, Any]]:
     posts = load_scheduled()
     due = []
     for p in posts:
-        if p.get("status") != "scheduled":
+        status = p.get("status")
+        if status != "scheduled":
+            # Log if there are failed posts for debugging
+            if status == "failed":
+                logger.debug(
+                    "Found failed scheduled post",
+                    post_id=p.get("id"),
+                    error=p.get("error_message", "unknown"),
+                )
             continue
         try:
             raw = p["scheduled_time"].replace("Z", "").split("+")[0].strip()
@@ -98,7 +106,13 @@ def get_due_posts() -> List[Dict[str, Any]]:
                 st = st.replace(tzinfo=None)
             if st <= now:
                 due.append(p)
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "Failed to parse scheduled_time for post",
+                post_id=p.get("id"),
+                scheduled_time=p.get("scheduled_time"),
+                error=str(e),
+            )
             continue
     return due
 
@@ -110,7 +124,13 @@ def mark_published(post_id: str) -> None:
 
 
 def mark_failed(post_id: str, error: str) -> None:
-    """Mark a scheduled post as failed (remove from store, optionally log)."""
-    posts = [p for p in load_scheduled() if p.get("id") != post_id]
+    """Mark a scheduled post as failed (keep in store with failed status for debugging)."""
+    posts = load_scheduled()
+    for p in posts:
+        if p.get("id") == post_id:
+            p["status"] = "failed"
+            p["error_message"] = error
+            p["failed_at"] = datetime.utcnow().isoformat()
+            break
     save_scheduled(posts)
-    logger.warning("Scheduled post failed", post_id=post_id, error=error)
+    logger.warning("Scheduled post marked as failed", post_id=post_id, error=error)

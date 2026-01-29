@@ -1,7 +1,9 @@
 """Instagram Graph API client"""
 
 import time
+import os
 from typing import Dict, Any, Optional, List
+from urllib.parse import urlparse
 import requests
 from tenacity import (
     retry,
@@ -15,10 +17,26 @@ from ..utils.exceptions import (
     InstagramAPIError,
     RateLimitError,
     ProxyError,
+    MediaURLUnavailableError,
 )
 from .rate_limiter import RateLimiter
 
 logger = get_logger(__name__)
+
+
+def _is_own_server_url(url: str) -> bool:
+    """Check if URL points to the app's own server (from BASE_URL/APP_URL)."""
+    try:
+        base_url = os.getenv("BASE_URL") or os.getenv("APP_URL")
+        if not base_url:
+            return False
+        parsed_url = urlparse(url)
+        parsed_base = urlparse(base_url)
+        url_host = (parsed_url.netloc or "").lower().split(":")[0]
+        base_host = (parsed_base.netloc or "").lower().split(":")[0]
+        return bool(url_host and base_host and url_host == base_host)
+    except Exception:
+        return False
 
 
 class InstagramClient:
@@ -256,20 +274,9 @@ class InstagramClient:
                 "localhost", "127.0.0.1", "trycloudflare.com", "ngrok", "127.0.0.1"
             ])
             
-            if not is_production:
-                # For dev URLs, verify strictly
-                self._verify_media_url(media_url)
-            else:
-                # For production, do a quick check but don't fail on minor issues
-                try:
-                    self._verify_media_url(media_url)
-                except InstagramAPIError as e:
-                    # Log but don't fail - Instagram will verify and return clear error if needed
-                    logger.warning(
-                        "Media URL verification had issues, but continuing - Instagram will verify",
-                        url=media_url,
-                        error=str(e),
-                    )
+            # Verify URL for both dev and production: 404 or HTML response means the URL is bad.
+            # Failing here avoids pointless retries and gives a clear error (e.g. "URL returned 404").
+            self._verify_media_url(media_url)
         
         params = {"caption": caption}
         
@@ -368,39 +375,72 @@ class InstagramClient:
             if error_code == 9004 or error_subcode == 2207067:
                 is_video = media_url and any(ext in media_url.lower() for ext in ['.mp4', '.mov', '.avi', '.mkv', '.webm'])
                 is_reels = params.get("media_type") == "REELS"
+                is_own_server = media_url and _is_own_server_url(media_url)
                 
-                if is_video or is_reels:
+                if is_own_server:
+                    # URL is from user's own server - focus on BASE_URL configuration
+                    base_url = os.getenv("BASE_URL") or os.getenv("APP_URL") or "not set"
+                    solution = (
+                        f"SOLUTION: Your video is hosted on your own server, but Instagram cannot access it.\n"
+                        f"\n"
+                        f"✅ CHECK THESE:\n"
+                        f"1) BASE_URL/APP_URL is set correctly: {base_url}\n"
+                        f"2) Your server is publicly accessible via HTTPS (Instagram requires HTTPS)\n"
+                        f"3) The upload URL is reachable: Try opening {media_url} in a browser\n"
+                        f"4) No firewall/security blocking Instagram's crawler\n"
+                        f"5) Server allows direct file access (no authentication required)\n"
+                        f"\n"
+                        f"💡 TIP: In production, set BASE_URL to your public HTTPS domain:\n"
+                        f"   export BASE_URL=https://yourdomain.com\n"
+                        f"   Then restart the app. Upload URLs will use this domain."
+                    )
+                elif is_video or is_reels:
+                    # Video/reels from external URL - but user wants own server, so suggest that first
                     media_type_name = "reels" if is_reels else "video"
                     solution = (
                         f"SOLUTION for {media_type_name.upper()} posts:\n"
-                        f"1) Upload your video to Cloudinary (https://cloudinary.com) - RECOMMENDED\n"
-                        f"2) Or use AWS S3 (with public access), Firebase Storage, or Imgur\n"
-                        f"3) Copy the direct HTTPS video URL from the hosting service\n"
-                        f"4) In InstaForge: Enable 'Post by URL' and paste the URL\n"
+                        f"\n"
+                        f"✅ OPTION 1: Use your own server (recommended)\n"
+                        f"1) Upload the file using 'Upload file' in InstaForge\n"
+                        f"2) Set BASE_URL (or APP_URL) to your public HTTPS domain\n"
+                        f"3) Ensure your server is publicly accessible\n"
+                        f"4) The upload URL will be served from your server\n"
+                        f"\n"
+                        f"✅ OPTION 2: Use external hosting (if own server not available)\n"
+                        f"1) Upload to Cloudinary, AWS S3, or Firebase Storage\n"
+                        f"2) Copy the direct HTTPS URL\n"
+                        f"3) Use 'Post by URL' and paste the URL\n"
                         f"\n"
                         f"❌ DO NOT USE:\n"
-                        f"• Cloudflare tunnels (trycloudflare.com) - unreliable for videos\n"
-                        f"• Ngrok - unreliable for videos\n"
-                        f"• Localhost URLs - Instagram cannot access them\n"
-                        f"\n"
-                        f"✅ RECOMMENDED HOSTS:\n"
-                        f"• Cloudinary (best for videos/reels)\n"
-                        f"• AWS S3 (reliable, scalable)\n"
-                        f"• Firebase Storage (Google Cloud)\n"
-                        f"• Imgur (for smaller videos < 200MB)"
+                        f"• Cloudflare tunnels (trycloudflare.com) - unreliable\n"
+                        f"• Ngrok - unreliable\n"
+                        f"• Localhost URLs - Instagram cannot access them"
                     )
                 else:
                     solution = (
-                        "SOLUTION: Use 'Post by URL' with Cloudinary/Imgur/S3, "
-                        "or try restarting the Cloudflare tunnel."
+                        "SOLUTION: Ensure the URL is publicly accessible via HTTPS.\n"
+                        "For your own server, set BASE_URL to your public domain."
                     )
+                # Check if it's a Cloudinary URL and provide specific guidance
+                is_cloudinary = "cloudinary.com" in (media_url or "").lower()
+                cloudinary_tip = ""
+                if is_cloudinary:
+                    cloudinary_tip = (
+                        f"\n💡 Cloudinary URL tips:\n"
+                        f"• Ensure the URL is a direct video link (ends with .mp4/.mov)\n"
+                        f"• Use the 'Upload' URL format, not 'Fetch' or 'Transform'\n"
+                        f"• Check if the video is set to 'Public' in Cloudinary dashboard\n"
+                        f"• Try accessing the URL in a browser - it should download/play the video directly\n"
+                    )
+                
                 raise InstagramAPIError(
                     f"Instagram cannot access the media URL (error {error_code}/{error_subcode}).\n"
                     f"This usually means:\n"
-                    f"1) The hosting service is blocking Instagram's bot/crawler\n"
-                    f"2) The URL is returning HTML instead of the media file\n"
-                    f"3) The server requires authentication or has CORS restrictions\n"
-                    f"4) For videos/reels: The hosting service is unreliable (Cloudflare/ngrok)\n"
+                    f"1) The URL is not publicly accessible\n"
+                    f"2) The server is blocking Instagram's bot/crawler\n"
+                    f"3) The URL is returning HTML instead of the media file\n"
+                    f"4) The server requires authentication or has CORS restrictions\n"
+                    f"{cloudinary_tip}"
                     f"\n"
                     f"{solution}\n"
                     f"\n"
@@ -413,19 +453,34 @@ class InstagramClient:
             if error_code == -2 or error_subcode == 2207003:
                 is_reels = params.get("media_type") == "REELS"
                 media_type_name = "reels" if is_reels else "video"
+                is_own_server = media_url and _is_own_server_url(media_url)
+                
+                if is_own_server:
+                    solution = (
+                        f"✅ SOLUTION for your own server:\n"
+                        f"• Ensure your server has fast, stable internet connection\n"
+                        f"• Check if the video file is too large (max 1GB)\n"
+                        f"• Verify the upload URL is directly accessible (no redirects)\n"
+                        f"• For reels: Video must be 3-15 minutes, 9:16 aspect ratio, MP4/MOV\n"
+                        f"• Consider optimizing video file size if connection is slow"
+                    )
+                else:
+                    solution = (
+                        f"✅ SOLUTION:\n"
+                        f"• Use your own server (set BASE_URL) or a fast CDN\n"
+                        f"• Ensure video URL is direct (no redirects, no authentication)\n"
+                        f"• For reels: Video must be 3-15 minutes, 9:16 aspect ratio, MP4/MOV format\n"
+                        f"• Maximum file size: 1GB"
+                    )
                 raise InstagramAPIError(
                     f"Instagram timed out fetching/processing the {media_type_name} (error {error_code}/{error_subcode}).\n"
                     f"\n"
                     f"This usually means:\n"
                     f"1) The video file is too large or takes too long to download\n"
-                    f"2) The hosting service (Cloudflare/ngrok) is too slow for Instagram's crawler\n"
+                    f"2) The hosting service is too slow for Instagram's crawler\n"
                     f"3) The video URL is not directly accessible (requires authentication/redirects)\n"
                     f"\n"
-                    f"✅ SOLUTION:\n"
-                    f"• Use Cloudinary, AWS S3, or Firebase Storage (fast, reliable CDN)\n"
-                    f"• Ensure video URL is direct (no redirects, no authentication)\n"
-                    f"• For reels: Video must be 3-15 minutes, 9:16 aspect ratio, MP4/MOV format\n"
-                    f"• Maximum file size: 1GB\n"
+                    f"{solution}\n"
                     f"\n"
                     f"URL: {media_url}\n"
                     f"Original error: {str(e)}",
@@ -458,7 +513,8 @@ class InstagramClient:
             True if URL is accessible
             
         Raises:
-            InstagramAPIError: If URL is not accessible or returns wrong content type
+            MediaURLUnavailableError: If URL returns 404, HTML, or non-media (no retry).
+            InstagramAPIError: On timeout or connection errors (retried by caller).
         """
         try:
             # Use Instagram's actual user agent to test if Cloudflare will block it
@@ -488,9 +544,8 @@ class InstagramClient:
                 content_type=content_type,
             )
             
-            # Check if we got a successful response
+            # Check if we got a successful response (fail fast, no retry)
             if status_code != 200:
-                # Log detailed error for debugging
                 logger.error(
                     "Media URL verification failed",
                     url=url,
@@ -498,41 +553,37 @@ class InstagramClient:
                     content_type=content_type,
                     headers=dict(response.headers),
                 )
-                raise InstagramAPIError(
+                raise MediaURLUnavailableError(
                     f"Media URL returned status {status_code} instead of 200. "
                     f"This means Instagram's crawler cannot access the URL. "
                     f"Check: 1) File exists on server, 2) Apache is proxying /uploads/ correctly, "
                     f"3) File permissions allow read access. "
                     f"URL: {url}",
-                    error_code=9004,
                 )
             
             # Verify Content-Type header
             is_image = any(ct in content_type for ct in ["image/jpeg", "image/png", "image/gif", "image/webp"])
             is_video = any(ct in content_type for ct in ["video/mp4", "video/quicktime"])
             
-            # If Content-Type is text/html, the server is likely returning an error page
+            # If Content-Type is text/html, the server is likely returning an error page (fail fast, no retry)
             if "text/html" in content_type:
-                # Try to get the actual response body to see what error we're getting
                 try:
-                    response_body = response.text[:500]  # First 500 chars
+                    response_body = response.text[:500]
                     logger.error(
                         "Media URL returns HTML instead of media",
                         url=url,
                         content_type=content_type,
                         response_preview=response_body,
                     )
-                except:
+                except Exception:
                     pass
-                
-                raise InstagramAPIError(
+                raise MediaURLUnavailableError(
                     f"Media URL is returning HTML instead of an image/video. "
                     f"This usually means: 1) Apache is returning an error page, 2) File doesn't exist, "
                     f"3) Apache proxy is misconfigured. "
                     f"Content-Type: {content_type}. "
                     f"Check Apache logs and verify file exists. "
                     f"URL: {url}",
-                    error_code=9004,
                 )
             
             if not (is_image or is_video):
@@ -552,25 +603,20 @@ class InstagramClient:
             )
             
             if response_get.status_code != 200:
-                raise InstagramAPIError(
+                raise MediaURLUnavailableError(
                     f"Media URL GET request returned status {response_get.status_code}. "
                     f"Instagram cannot access media from this URL. "
                     f"URL: {url}",
-                    error_code=9004,
                 )
-            
             # Read first few bytes to check if it's actually binary/image data
             chunk = next(response_get.iter_content(chunk_size=1024), b"")
             response_get.close()
-            
-            # Check if content looks like HTML (starts with <) or text
+            # Check if content looks like HTML (starts with <) or text (fail fast, no retry)
             if chunk.startswith(b"<") or chunk.startswith(b"<!DOCTYPE") or chunk.startswith(b"<html"):
-                raise InstagramAPIError(
+                raise MediaURLUnavailableError(
                     f"Media URL is returning HTML/text instead of binary image/video data. "
                     f"Cloudflare or the server is likely blocking Instagram's bot. "
-                    f"Instagram will reject this with error 9004. "
                     f"URL: {url}",
-                    error_code=9004,
                 )
             
             logger.info(
@@ -606,8 +652,9 @@ class InstagramClient:
                     f"URL: {url}",
                     error_code=9004,
                 )
+        except MediaURLUnavailableError:
+            raise
         except InstagramAPIError:
-            # Re-raise our custom errors
             raise
         except Exception as e:
             # For other errors, log warning but don't fail (Instagram might still work)

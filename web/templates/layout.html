@@ -11,7 +11,7 @@
     <div class="app-layout">
         <aside class="sidebar">
             <div class="sidebar-header">
-                <h2>InstaForge</h2>
+                <h2>🚀 InstaForge</h2>
             </div>
             <nav class="sidebar-nav">
                 <a href="/" class="nav-item {% if request.url.path == '/' %}active{% endif %}">
@@ -32,7 +32,10 @@
                 <a href="/webhook-test" class="nav-item {% if request.url.path == '/webhook-test' %}active{% endif %}">
                     <span class="icon">🔗</span> Webhook Test
                 </a>
-                <a href="/config" class="nav-item {% if request.url.path == '/config' %}active{% endif %}">
+                <a href="/users" id="users-nav-item" class="nav-item {% if request.url.path == '/users' %}active{% endif %}" style="display: none;">
+                    <span class="icon">👤</span> Users
+                </a>
+                <a href="/config" id="settings-nav-item" class="nav-item {% if request.url.path == '/config' %}active{% endif %}" style="display: none;">
                     <span class="icon">⚙️</span> Settings
                 </a>
             </nav>
@@ -46,7 +49,16 @@
         <main class="main-content">
             <header class="top-bar">
                 <h1 class="page-title">{% block page_title %}{% endblock %}</h1>
-                <div class="top-bar-actions">
+                <div class="top-bar-actions" style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                    <div id="user-info" style="display: none; align-items: center; gap: 0.75rem;">
+                        <div style="display: flex; flex-direction: column; align-items: flex-end;">
+                            <span id="user-name" style="font-weight: 600; color: var(--text-main); font-size: 0.9375rem;"></span>
+                            <span id="user-role" class="badge badge-info" style="font-size: 0.6875rem; margin-top: 0.25rem;"></span>
+                        </div>
+                    </div>
+                    <button id="logout-btn" class="btn btn-secondary" onclick="handleLogout()" style="display: none;">
+                        <span>🚪</span> Logout
+                    </button>
                     {% block actions %}{% endblock %}
                 </div>
             </header>
@@ -58,6 +70,40 @@
     </div>
     
     <script src="/static/js/app.js"></script>
+    <script src="/static/js/auth.js"></script>
+    <script>
+        // Load user info and show/hide navigation items
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const user = await getCurrentUser();
+                if (user) {
+                    // Show user info
+                    document.getElementById('user-info').style.display = 'flex';
+                    document.getElementById('user-name').textContent = user.username;
+                    document.getElementById('user-role').textContent = user.role === 'admin' ? 'Admin' : 'User';
+                    
+                    // Show logout button
+                    document.getElementById('logout-btn').style.display = 'block';
+                    
+                    // Show admin-only nav items
+                    if (user.role === 'admin') {
+                        document.getElementById('users-nav-item').style.display = 'block';
+                        document.getElementById('settings-nav-item').style.display = 'block';
+                    }
+                } else {
+                    // Not logged in, redirect handled by middleware
+                }
+            } catch (error) {
+                console.error('Error loading user info:', error);
+            }
+        });
+        
+        async function handleLogout() {
+            if (confirm('Are you sure you want to logout?')) {
+                await logout();
+            }
+        }
+    </script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

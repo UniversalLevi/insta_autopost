@@ -10,6 +10,7 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, PlainTextResponse, JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 from jinja2 import Environment, FileSystemLoader
 
 from .api import router as api_router, auth_router
@@ -44,6 +45,68 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Authentication middleware
+class AuthMiddleware(BaseHTTPMiddleware):
+    """Middleware to redirect unauthenticated users to login"""
+    
+    # Public routes that don't require authentication
+    PUBLIC_ROUTES = {
+        "/login",
+        "/register",
+        "/auth/login",
+        "/auth/logout",
+        "/auth/register",
+        "/auth/meta/login",
+        "/auth/meta/callback",
+        "/auth/meta/redirect-uri",
+        "/webhooks/instagram",
+        "/api/health",
+    }
+    
+    # Routes that start with these prefixes are public
+    PUBLIC_PREFIXES = [
+        "/static/",
+        "/uploads/",
+    ]
+    
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+        
+        # Check if route is public
+        is_public = (
+            path in self.PUBLIC_ROUTES or
+            any(path.startswith(prefix) for prefix in self.PUBLIC_PREFIXES) or
+            path.startswith("/api/") or  # API routes handle auth themselves
+            path.startswith("/auth/")  # Auth routes are public
+        )
+        
+        # For HTML pages (not API), check authentication
+        if not is_public:
+            # Check if user is authenticated
+            from web.auth_deps import get_session_token
+            from src.auth.user_auth import validate_session
+            
+            token = get_session_token(request)
+            user = validate_session(token) if token else None
+            
+            if not user:
+                # Redirect to login for HTML pages
+                if request.headers.get("accept", "").startswith("text/html"):
+                    return RedirectResponse(url="/login", status_code=302)
+                # For API requests, let the endpoint handle 401
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "Not authenticated"}
+                )
+        
+        response = await call_next(request)
+        return response
+
+
+# Add authentication middleware (after CORS)
+app.add_middleware(AuthMiddleware)
 
 # Mount static files
 static_path = Path(__file__).parent / "static"
@@ -338,36 +401,60 @@ async def startup_event():
         if ENVIRONMENT == "development":
             port = int(os.getenv("PORT", "8000"))
             print("Starting Cloudflare tunnel (development mode)...")
-            start_cloudflare(port=port)
-        else:
-            print("Production mode: Skipping Cloudflare tunnel (using Apache reverse proxy)")
+            try:
+                start_cloudflare(port=port)
+            except Exception as e:
+                logger.warning(f"Failed to start Cloudflare tunnel: {e}")
         
         instaforge_app = InstaForgeApp()
         instaforge_app.initialize()
         
         # Start comment monitoring for all accounts
         print("Starting comment automation...")
-        instaforge_app.comment_monitor.start_monitoring_all_accounts()
-        print("Comment automation started - monitoring posts for new comments")
+        try:
+            instaforge_app.comment_monitor.start_monitoring_all_accounts()
+            print("Comment automation started - monitoring posts for new comments")
+        except Exception as e:
+            logger.error(f"Failed to start comment monitoring: {e}", exc_info=True)
         
         # Set app instance for API routes
         from .api import set_app_instance
         set_app_instance(instaforge_app)
+        
         # Start background loop to publish scheduled posts when due
-        start_scheduled_publisher(instaforge_app, interval_seconds=60)
+        try:
+            start_scheduled_publisher(instaforge_app, interval_seconds=60)
+        except Exception as e:
+            logger.error(f"Failed to start scheduled publisher: {e}", exc_info=True)
+        
         # Daily token refresh for OAuth accounts (tokens older than 40 days)
-        start_daily_token_refresh_job(instaforge_app, interval_seconds=86400)
+        try:
+            start_daily_token_refresh_job(instaforge_app, interval_seconds=86400)
+        except Exception as e:
+            logger.error(f"Failed to start token refresh job: {e}", exc_info=True)
+        
         # Start warming scheduler
         print("Starting warming scheduler...")
-        start_warming_scheduler(instaforge_app)
-        print("Warming scheduler started - warming actions will run at scheduled time")
+        try:
+            start_warming_scheduler(instaforge_app)
+            print("Warming scheduler started - warming actions will run at scheduled time")
+        except Exception as e:
+            logger.error(f"Failed to start warming scheduler: {e}", exc_info=True)
+            print(f"Warning: Warming scheduler failed to start: {e}")
         
         # Start account health monitoring
         if instaforge_app.account_health_service:
-            instaforge_app.account_health_service.start_monitoring()
-            print("Account health monitoring started")
+            try:
+                instaforge_app.account_health_service.start_monitoring()
+                print("Account health monitoring started")
+            except Exception as e:
+                logger.error(f"Failed to start account health monitoring: {e}", exc_info=True)
+        
+        print("InstaForge startup completed successfully!")
     except Exception as e:
-        print(f"Warning: Failed to initialize InstaForge app: {e}")
+        logger.exception("Critical error during startup", error=str(e))
+        print(f"ERROR: Failed to initialize InstaForge app: {e}")
+        print("The application may not function correctly. Check the logs for details.")
 
 
 @app.on_event("shutdown")
@@ -475,6 +562,37 @@ async def config_page(request: Request):
 async def ai_settings_page(request: Request):
     """AI Settings page"""
     content = render_template("ai-settings.html", {"request": request})
+    return HTMLResponse(content=content)
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    """Login page"""
+    content = render_template("login.html", {"request": request})
+    return HTMLResponse(content=content)
+
+
+@app.get("/register", response_class=HTMLResponse)
+async def register_page(request: Request):
+    """Register page"""
+    content = render_template("register.html", {"request": request})
+    return HTMLResponse(content=content)
+
+
+@app.get("/users", response_class=HTMLResponse)
+async def users_page(request: Request):
+    """User management page (admin only)"""
+    # Check if user is admin (middleware already checked auth)
+    from web.auth_deps import get_session_token
+    from src.auth.user_auth import validate_session
+    
+    token = get_session_token(request)
+    user = validate_session(token) if token else None
+    
+    if not user or user.role != "admin":
+        return RedirectResponse(url="/", status_code=302)
+    
+    content = render_template("users.html", {"request": request})
     return HTMLResponse(content=content)
 
 

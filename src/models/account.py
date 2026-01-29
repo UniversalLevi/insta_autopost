@@ -73,6 +73,7 @@ class Account(BaseModel):
     access_token: str
     basic_display_token: Optional[str] = None  # Secondary token for basic display features
     password: Optional[str] = None  # For browser automation login
+    owner_id: Optional[str] = None  # User ID who owns this account (None = no owner, visible to all)
     proxy: ProxyConfig = Field(default_factory=ProxyConfig)
     warming: WarmingConfig = Field(default_factory=WarmingConfig)
     comment_to_dm: Optional[CommentToDMConfig] = None  # Comment-to-DM automation config

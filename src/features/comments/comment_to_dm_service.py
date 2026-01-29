@@ -303,11 +303,12 @@ class CommentToDMService:
         if not msg:
             link = (link_to_send or "").strip()
             is_public_url = link.startswith("http://") or link.startswith("https://")
-            name = comment_username or "there"
+            # Mention user with @username so they get notified and see the link
+            mention = f"@{comment_username}" if comment_username else "there"
             if is_public_url:
-                msg = f"Hey {name}! 👋 Instagram doesn't allow DMs unless you've messaged us first. Here's your link: {link}"
+                msg = f"Hey {mention}! 👋 Instagram doesn't allow DMs unless you've messaged us first. Here's your link: {link}"
             else:
-                msg = f"Hey {name}! 👋 Message us first (DM) so we can send you the link – Instagram restricts automated DMs."
+                msg = f"Hey {mention}! 👋 Message us first (DM) so we can send you the link – Instagram restricts automated DMs."
         try:
             # Instagram replies API expects message as query param, not JSON body
             client._make_request("POST", f"{comment_id}/replies", params={"message": msg})
@@ -380,19 +381,35 @@ class CommentToDMService:
             else:
                 formatted_reply = reply_text
             
-            # Reply to comment
-            client._make_request("POST", f"{comment_id}/replies", params={"message": formatted_reply})
-            
-            logger.info(
-                "Comment reply posted with AI text",
-                account_id=account_id,
-                comment_id=comment_id,
-                mentioned_user=comment_username,
-                reply_preview=formatted_reply[:100],
-            )
-            return True
+            # Reply to comment using POST with data (not params) - Instagram API requirement
+            try:
+                result = client._make_request(
+                    "POST",
+                    f"{comment_id}/replies",
+                    data={"message": formatted_reply},  # Use data, not params
+                )
+                
+                logger.info(
+                    "Comment reply posted with AI text",
+                    account_id=account_id,
+                    comment_id=comment_id,
+                    mentioned_user=comment_username,
+                    reply_preview=formatted_reply[:100],
+                    reply_id=result.get("id") if isinstance(result, dict) else None,
+                )
+                return True
+            except Exception as reply_err:
+                logger.error(
+                    "Failed to post AI comment reply - API call failed",
+                    account_id=account_id,
+                    comment_id=comment_id,
+                    error=str(reply_err),
+                    error_type=type(reply_err).__name__,
+                    reply_text=formatted_reply[:100],
+                )
+                raise
         except Exception as e:
-            logger.warning(
+            logger.exception(
                 "Failed to post AI comment reply",
                 account_id=account_id,
                 comment_id=comment_id,
@@ -432,15 +449,18 @@ class CommentToDMService:
             "fallback_replied": 0,  # Comments that got fallback reply (DM blocked by 24h window)
         }
         
-        # Check if automation is enabled
-        if not self._is_automation_enabled(account_id):
+        # Check if we should process: account-level enabled OR post has a specific link
+        account_enabled = self._is_automation_enabled(account_id)
+        post_config = self.post_dm_config.get_post_dm_config(account_id, media_id)
+        has_post_link = post_config and post_config.get("file_url")
+        if not account_enabled and not has_post_link:
             logger.debug(
-                "Comment-to-DM automation disabled",
+                "Comment-to-DM skipped: automation disabled and no post-specific link",
                 account_id=account_id,
                 media_id=media_id,
             )
             return results
-        
+
         # Get last processed comment ID for this post
         last_processed_id = self.last_processed_comment_id[account_id].get(media_id)
         
@@ -721,8 +741,8 @@ class CommentToDMService:
             )
             return result
         
-        # Check safety limits
-        can_send, limit_reason = self._check_safety_limits(account_id, dm_config)
+        # Check safety limits (dm_config may be None if account has no comment_to_dm in config)
+        can_send, limit_reason = self._check_safety_limits(account_id, dm_config or {})
         if not can_send:
             result["reason"] = limit_reason
             logger.warning(
@@ -768,14 +788,14 @@ class CommentToDMService:
                 dm_message = ai_message.strip()
             else:
                 dm_message = self._generate_dm_message(
-                    template=dm_config.get("dm_message_template"),
+                    template=(dm_config or {}).get("dm_message_template"),
                     link=link_to_send,
                     comment_username=comment_username,
                     post_caption=media_caption,
                 )
         else:
             dm_message = self._generate_dm_message(
-                template=dm_config.get("dm_message_template"),
+                template=(dm_config or {}).get("dm_message_template"),
                 link=link_to_send,
                 comment_username=comment_username,
                 post_caption=media_caption,

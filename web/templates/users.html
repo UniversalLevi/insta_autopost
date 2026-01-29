@@ -1,0 +1,378 @@
+{% extends "layout.html" %}
+
+{% block title %}User Management{% endblock %}
+{% block page_title %}User Management{% endblock %}
+
+{% block actions %}
+<button class="btn btn-primary" onclick="showCreateUserModal()">
+    <span>➕</span> Create User
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div id="users-table-container">
+        <div class="text-muted">Loading users...</div>
+    </div>
+</div>
+
+<!-- Create User Modal -->
+<div id="create-user-modal" class="modal hidden">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Create User</h2>
+            <button class="modal-close" onclick="closeCreateUserModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+        <form id="create-user-form" onsubmit="handleCreateUser(event)">
+            <div class="form-group">
+                <label class="form-label">Username</label>
+                <input type="text" id="create-username" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Email (optional)</label>
+                <input type="email" id="create-email" class="form-control">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Password</label>
+                <input type="password" id="create-password" class="form-control" required minlength="8">
+                <div class="text-sm text-muted">Must be at least 8 characters</div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Role</label>
+                <select id="create-role" class="form-control" required>
+                    <option value="user">User</option>
+                    <option value="admin">Admin</option>
+                </select>
+            </div>
+            <div class="flex gap-2 justify-between" style="margin-top: 1.5rem;">
+                <button type="button" class="btn btn-secondary" onclick="closeCreateUserModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">
+                    <span>➕</span> Create User
+                </button>
+            </div>
+        </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit User Modal -->
+<div id="edit-user-modal" class="modal hidden" onclick="if(event.target === this) closeEditUserModal()">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Edit User</h2>
+            <button class="modal-close" onclick="closeEditUserModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+        <div class="modal-body">
+        <form id="edit-user-form" onsubmit="handleUpdateUser(event)">
+            <input type="hidden" id="edit-user-id">
+            <div class="form-group">
+                <label class="form-label">Username</label>
+                <input type="text" id="edit-username" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Email</label>
+                <input type="email" id="edit-email" class="form-control">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Role</label>
+                <select id="edit-role" class="form-control" required>
+                    <option value="user">User</option>
+                    <option value="admin">Admin</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label flex items-center gap-2" style="cursor: pointer;">
+                    <input type="checkbox" id="edit-is-active">
+                    Active
+                </label>
+            </div>
+            <div class="flex gap-2 justify-between" style="margin-top: 1.5rem;">
+                <button type="button" class="btn btn-secondary" onclick="closeEditUserModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">
+                    <span>💾</span> Update User
+                </button>
+            </div>
+        </form>
+        </div>
+        </div>
+    </div>
+</div>
+
+<script src="/static/js/auth.js"></script>
+<script>
+let currentUser = null;
+let users = [];
+
+// Load users on page load
+document.addEventListener('DOMContentLoaded', async () => {
+    // Check auth
+    currentUser = await getCurrentUser();
+    if (!currentUser) {
+        window.location.href = '/login';
+        return;
+    }
+    
+    // Check if admin
+    if (currentUser.role !== 'admin') {
+        window.location.href = '/';
+        return;
+    }
+    
+    await loadUsers();
+});
+
+async function loadUsers() {
+    try {
+        const token = getSessionToken();
+        const response = await fetch('/api/users', {
+            headers: {
+                'Authorization': token ? `Bearer ${token}` : '',
+            },
+            credentials: 'include',
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to load users');
+        }
+        
+        const data = await response.json();
+        users = data.users || [];
+        renderUsers();
+    } catch (error) {
+        console.error('Error loading users:', error);
+        document.getElementById('users-table-container').innerHTML = 
+            '<div class="text-muted">Error loading users. Please refresh the page.</div>';
+    }
+}
+
+function renderUsers() {
+    const container = document.getElementById('users-table-container');
+    
+    if (users.length === 0) {
+        container.innerHTML = '<div class="text-muted">No users found.</div>';
+        return;
+    }
+    
+    let html = `
+        <table class="log-table" style="width: 100%;">
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    users.forEach(user => {
+        const createdDate = new Date(user.created_at).toLocaleDateString();
+        const statusBadge = user.is_active 
+            ? '<span class="badge badge-info">Active</span>'
+            : '<span class="badge" style="background: #FEE2E2; color: #991B1B;">Inactive</span>';
+        const roleBadge = user.role === 'admin'
+            ? '<span class="badge" style="background: #FEF3C7; color: #92400E;">Admin</span>'
+            : '<span class="badge badge-info">User</span>';
+        
+        html += `
+            <tr>
+                <td>${escapeHtml(user.username)}</td>
+                <td>${escapeHtml(user.email || '-')}</td>
+                <td>${roleBadge}</td>
+                <td>${statusBadge}</td>
+                <td>${createdDate}</td>
+                <td>
+                    <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.875rem;" onclick="editUser('${user.id}')">Edit</button>
+                    ${user.id !== currentUser.id ? `
+                        <button class="btn ${user.is_active ? 'btn-secondary' : 'btn-primary'}" style="padding: 0.25rem 0.5rem; font-size: 0.875rem; margin-left: 0.5rem;" onclick="toggleUserStatus('${user.id}', ${!user.is_active})">
+                            ${user.is_active ? 'Deactivate' : 'Activate'}
+                        </button>
+                        <button class="btn btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.875rem; margin-left: 0.5rem;" onclick="deleteUser('${user.id}', '${escapeHtml(user.username)}')">Delete</button>
+                    ` : ''}
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += `
+            </tbody>
+        </table>
+    `;
+    
+    container.innerHTML = html;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function showCreateUserModal() {
+    const modal = document.getElementById('create-user-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('show');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeCreateUserModal() {
+    const modal = document.getElementById('create-user-modal');
+    modal.classList.remove('show');
+    modal.classList.add('hidden');
+    document.getElementById('create-user-form').reset();
+    document.body.style.overflow = '';
+}
+
+async function handleCreateUser(event) {
+    event.preventDefault();
+    
+    const username = document.getElementById('create-username').value;
+    const email = document.getElementById('create-email').value;
+    const password = document.getElementById('create-password').value;
+    const role = document.getElementById('create-role').value;
+    
+    try {
+        const token = getSessionToken();
+        const response = await fetch('/api/users', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': token ? `Bearer ${token}` : '',
+            },
+            credentials: 'include',
+            body: JSON.stringify({ username, email: email || undefined, password, role }),
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.detail || 'Failed to create user');
+        }
+        
+        closeCreateUserModal();
+        await loadUsers();
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
+function editUser(userId) {
+    const user = users.find(u => u.id === userId);
+    if (!user) return;
+    
+    document.getElementById('edit-user-id').value = user.id;
+    document.getElementById('edit-username').value = user.username;
+    document.getElementById('edit-email').value = user.email || '';
+    document.getElementById('edit-role').value = user.role;
+    document.getElementById('edit-is-active').checked = user.is_active;
+    
+    const modal = document.getElementById('edit-user-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('show');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeEditUserModal() {
+    const modal = document.getElementById('edit-user-modal');
+    modal.classList.remove('show');
+    modal.classList.add('hidden');
+    document.getElementById('edit-user-form').reset();
+    document.body.style.overflow = '';
+}
+
+async function handleUpdateUser(event) {
+    event.preventDefault();
+    
+    const userId = document.getElementById('edit-user-id').value;
+    const username = document.getElementById('edit-username').value;
+    const email = document.getElementById('edit-email').value;
+    const role = document.getElementById('edit-role').value;
+    const isActive = document.getElementById('edit-is-active').checked;
+    
+    try {
+        const token = getSessionToken();
+        const response = await fetch(`/api/users/${userId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': token ? `Bearer ${token}` : '',
+            },
+            credentials: 'include',
+            body: JSON.stringify({ username, email: email || undefined, role, is_active: isActive }),
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.detail || 'Failed to update user');
+        }
+        
+        closeEditUserModal();
+        await loadUsers();
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
+async function toggleUserStatus(userId, activate) {
+    if (!confirm(`Are you sure you want to ${activate ? 'activate' : 'deactivate'} this user?`)) {
+        return;
+    }
+    
+    try {
+        const token = getSessionToken();
+        const endpoint = activate ? 'activate' : 'deactivate';
+        const response = await fetch(`/api/users/${userId}/${endpoint}`, {
+            method: 'POST',
+            headers: {
+                'Authorization': token ? `Bearer ${token}` : '',
+            },
+            credentials: 'include',
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.detail || 'Failed to update user status');
+        }
+        
+        await loadUsers();
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
+async function deleteUser(userId, username) {
+    if (!confirm(`Are you sure you want to delete user "${username}"? This action cannot be undone.`)) {
+        return;
+    }
+    
+    try {
+        const token = getSessionToken();
+        const response = await fetch(`/api/users/${userId}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': token ? `Bearer ${token}` : '',
+            },
+            credentials: 'include',
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.detail || 'Failed to delete user');
+        }
+        
+        await loadUsers();
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+</script>
+
+{% endblock %}

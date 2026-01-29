@@ -135,7 +135,7 @@ class BrowserSessionManager:
                     if element:
                         logger.debug("Logged in detected", indicator=selector)
                         return True
-                except:
+                except Exception:
                     continue
             
             # Check for login page indicators
@@ -150,7 +150,7 @@ class BrowserSessionManager:
                     if element:
                         logger.debug("Not logged in - login page detected")
                         return False
-                except:
+                except Exception:
                     continue
             
             # Default to not logged in if we can't determine

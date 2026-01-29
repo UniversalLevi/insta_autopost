@@ -35,6 +35,11 @@ class PostingError(InstaForgeError):
     pass
 
 
+class MediaURLUnavailableError(InstaForgeError):
+    """Media URL is not accessible (404, HTML page, etc.). Do not retry."""
+    pass
+
+
 class ProxyError(InstaForgeError):
     """Proxy connection error"""
     pass

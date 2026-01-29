@@ -113,16 +113,36 @@ def _process_incoming_dm_for_ai_reply(account_id: str, value: Dict[str, Any], ap
         value_structure=list(value.keys()) if isinstance(value, dict) else "not_dict",
     )
     
+    # Validate app instance and services
+    if not app:
+        logger.error(
+            "AI_DM_WEBHOOK",
+            action="error",
+            reason="app_not_provided",
+            account_id=account_id,
+        )
+        return
+    
+    if not hasattr(app, 'account_service') or not app.account_service:
+        logger.error(
+            "AI_DM_WEBHOOK",
+            action="error",
+            reason="account_service_not_initialized",
+            account_id=account_id,
+        )
+        return
+    
     # Check if AI DM is enabled for this account
     try:
         account = app.account_service.get_account(account_id)
-    except AccountError as e:
+    except Exception as e:
         logger.warning(
             "AI_DM_WEBHOOK",
             action="skipped",
             reason="account_not_found",
             account_id=account_id,
             error=str(e),
+            error_type=type(e).__name__,
         )
         return
     if not account:
@@ -533,13 +553,34 @@ def process_webhook_payload(body: Any, app: Any) -> None:
                     )
                     continue
                 comments = [comment]
+                
+                # Try to get post caption for better AI context (optional, don't fail if unavailable)
+                post_caption = None
+                if account_id and app and getattr(app, "account_service", None):
+                    try:
+                        client = app.account_service.get_client(account_id)
+                        media_info = client._make_request(
+                            "GET",
+                            media_id,
+                            params={"fields": "caption"}
+                        )
+                        post_caption = media_info.get("caption", "")
+                    except Exception as e:
+                        logger.debug(
+                            "Could not fetch post caption for webhook comment",
+                            account_id=account_id,
+                            media_id=media_id,
+                            error=str(e),
+                        )
+                        # Continue without caption - not critical
+                
                 if account_id and app and getattr(app, "comment_to_dm_service", None):
                     try:
                         app.comment_to_dm_service.process_new_comments_for_dm(
                             account_id=account_id,
                             media_id=media_id,
                             comments=comments,
-                            post_caption=None,
+                            post_caption=post_caption,
                         )
                         logger.info(
                             "Instagram webhook comment forwarded to comment-to-DM",

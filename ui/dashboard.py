@@ -434,7 +434,7 @@ class InstaForgeDashboard:
                     log_entry = f"[{style}]{timestamp} [{level}] {event}[/{style}]"
                     
                     log_table.add_row(log_entry)
-                except:
+                except Exception:
                     # Plain text log entry
                     log_table.add_row(line.strip()[:100])
             

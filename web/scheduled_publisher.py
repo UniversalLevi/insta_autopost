@@ -40,9 +40,9 @@ def _build_post(raw: dict):
             children.append(PostMedia(media_type=ct, url=HttpUrl(url)))
         media = PostMedia(media_type="carousel", children=children, caption=caption)
     else:
-        # Preserve reels type if stored as reels
-        if media_type == "reels":
-            inferred = "reels"
+        # Preserve video/reels type if explicitly stored
+        if media_type in ("reels", "video"):
+            inferred = media_type
         else:
             # Infer from URL so .mp4 stored as "image" still uses video_url (fixes timeout)
             # This handles URLs with query parameters like ?t=timestamp
@@ -50,11 +50,11 @@ def _build_post(raw: dict):
         
         media = PostMedia(media_type=inferred, url=HttpUrl(urls[0]), caption=caption)
         
-        logger.debug(
-            "Scheduled post media type inferred",
+        logger.info(
+            "Scheduled post media type",
             stored_type=media_type,
-            inferred_type=inferred,
-            url_preview=urls[0][:50],
+            final_type=inferred,
+            url_preview=urls[0][:80],
         )
 
     post = Post(
@@ -70,12 +70,38 @@ def _build_post(raw: dict):
 
 def _run_once(app):
     if not app or not getattr(app, "posting_service", None):
+        logger.warning("Scheduled publisher: app or posting_service not available")
         return
     due = get_due_posts()
+    if not due:
+        logger.debug("Scheduled publisher: No due posts found")
+        return
+    logger.info("Scheduled publisher: Found due posts", count=len(due))
     for raw in due:
         pid = raw.get("id")
+        account_id = raw.get("account_id")
+        media_type = raw.get("media_type")
+        scheduled_time = raw.get("scheduled_time")
+        urls = raw.get("urls", [])
+        
+        logger.info(
+            "Processing scheduled post",
+            post_id=pid,
+            account_id=account_id,
+            media_type=media_type,
+            scheduled_time=scheduled_time,
+            url_preview=urls[0][:80] if urls else "no-url",
+        )
+        
         try:
             post = _build_post(raw)
+            logger.info(
+                "Built post from scheduled data",
+                post_id=pid,
+                media_type=post.media.media_type,
+                url=post.media.url if hasattr(post.media, 'url') else 'carousel',
+            )
+            
             app.posting_service.publish_post(post)
             
             # After successful publishing, save Auto-DM config if enabled
@@ -104,10 +130,23 @@ def _run_once(app):
                     )
             
             mark_published(pid)
-            logger.info("Scheduled post published", post_id=pid, account_id=raw["account_id"])
+            logger.info(
+                "Scheduled post published successfully",
+                post_id=pid,
+                account_id=account_id,
+                media_type=media_type,
+                instagram_media_id=post.instagram_media_id,
+            )
         except Exception as e:
-            logger.exception("Scheduled post publish failed", post_id=pid, error=str(e))
-            mark_failed(pid, str(e))
+            error_msg = str(e)
+            logger.exception(
+                "Scheduled post publish failed",
+                post_id=pid,
+                account_id=account_id,
+                media_type=media_type,
+                error=error_msg,
+            )
+            mark_failed(pid, error_msg)
 
 
 def _loop(app, interval_seconds: int = 60):

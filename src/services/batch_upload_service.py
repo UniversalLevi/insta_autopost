@@ -132,7 +132,7 @@ def extract_zip(zip_path: Path, extract_to: Path) -> List[Path]:
                                                 try:
                                                     if not any(dir_to_remove.iterdir()):
                                                         dir_to_remove.rmdir()
-                                                except:
+                                                except OSError:
                                                     pass
                             except Exception as cleanup_err:
                                 logger.debug("Failed to clean up directories", error=str(cleanup_err))

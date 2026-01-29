@@ -17,9 +17,10 @@
         </div>
     </div>
 
-    <!-- Webhook Configuration -->
+    <!-- Webhook Configuration (matches Meta app setup) -->
     <div class="card">
         <h2>📡 Webhook Configuration</h2>
+        <p class="text-sm text-muted" style="margin-bottom: 1rem;">Use these values in your Meta app. Callback URL must be the <strong>production URL</strong> below, not this page.</p>
         <div id="webhook-config" class="loading">Loading webhook configuration...</div>
     </div>
 
@@ -253,23 +254,22 @@ async function loadWebhookConfig() {
         const response = await fetch('/api/webhooks/callback-url');
         const data = await response.json();
         
+        const prodUrl = data.production_url || data.meta_callback_url || 'https://veilforce.com/webhooks/instagram';
         const html = `
-            <div class="status-item ${data.callback_url ? 'ok' : 'error'}">
-                <div class="status-label">Callback URL</div>
-                <div class="status-value">${data.callback_url || 'Not configured'}</div>
-                <div class="code-block" style="margin-top: 8px;">${data.callback_url || 'N/A'}</div>
+            <div class="status-item ok" style="margin-bottom: 1rem;">
+                <div class="status-label"><strong>Production URL (use this in Meta)</strong></div>
+                <div class="code-block" style="margin-top: 6px; word-break: break-all;">${prodUrl}</div>
+                <div class="text-sm text-muted" style="margin-top: 4px;">In Meta app → Callback URL = this URL</div>
             </div>
-            <div class="status-item ok">
-                <div class="status-label">Verify Token</div>
-                <div class="status-value">${data.verify_token || 'Not set'}</div>
-                <div class="code-block" style="margin-top: 8px;">${data.verify_token || 'N/A'}</div>
+            <div class="status-item ok" style="margin-bottom: 1rem;">
+                <div class="status-label"><strong>Verify Token (use this in Meta)</strong></div>
+                <div class="code-block" style="margin-top: 6px;">${data.verify_token || 'Not set'}</div>
+                <div class="text-sm text-muted" style="margin-top: 4px;">In Meta app → Verify token = this value</div>
             </div>
-            <div class="status-item ${data.production_url ? 'ok' : 'warning'}">
-                <div class="status-label">Production URL</div>
-                <div class="status-value">${data.production_url || 'Not set'}</div>
-                <div class="code-block" style="margin-top: 8px;">${data.production_url || 'N/A'}</div>
+            <div class="status-item warning" style="margin-top: 1rem; padding: 12px; background: #fef3c7; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                <strong>Important:</strong> Do NOT use <code>/api/webhooks/callback-url</code> as Callback URL in Meta. Use the Production URL above (<code>.../webhooks/instagram</code>). On veilforce.com server set <code>BASE_URL=https://veilforce.com</code>.
             </div>
-            ${data.note ? `<div class="status-item warning" style="margin-top: 12px;"><div class="status-value">${data.note}</div></div>` : ''}
+            ${data.callback_url && data.callback_url !== prodUrl ? `<div class="status-item" style="margin-top: 12px;"><div class="status-label">Current callback (dev)</div><div class="code-block">${data.callback_url}</div></div>` : ''}
         `;
         
         container.innerHTML = html;

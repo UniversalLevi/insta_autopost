@@ -47,7 +47,7 @@ def start_cloudflare(port: int = 8000) -> Optional[str]:
             try:
                 if process.stdout:
                     line = process.stdout.readline()
-            except:
+            except Exception:
                 pass
             
             if line:
@@ -109,7 +109,7 @@ def start_cloudflare(port: int = 8000) -> Optional[str]:
         if _cloudflare_process:
             try:
                 _cloudflare_process.terminate()
-            except:
+            except Exception:
                 pass
             _cloudflare_process = None
         return None
@@ -139,18 +139,28 @@ def get_cloudflare_url() -> Optional[str]:
     return _cloudflare_url
 
 
-def get_base_url(request_base_url: str) -> str:
-    """Get base URL for serving uploads and same-origin checks. Prefers production domain, then Cloudflare tunnel."""
+def get_base_url(request_base_url: str = "", request_headers=None) -> str:
+    """Get base URL for serving uploads. Prefers BASE_URL, then proxy headers, then Cloudflare tunnel, then request."""
     import os
 
-    # Production: use BASE_URL or APP_URL (your public HTTPS domain)
+    # 1) Production: use BASE_URL or APP_URL (your public HTTPS domain)
     base = os.getenv("BASE_URL") or os.getenv("APP_URL")
     if base:
         return base.strip().rstrip("/")
 
-    # Development: use Cloudflare tunnel if available
+    # 2) Behind a proxy (Render, Heroku, nginx): use X-Forwarded-Proto + X-Forwarded-Host
+    if request_headers:
+        proto = request_headers.get("X-Forwarded-Proto") or request_headers.get("X-Forwarded-Protocol")
+        host = request_headers.get("X-Forwarded-Host") or request_headers.get("Host")
+        if proto and host:
+            return f"{proto.strip()}://{host.split(',')[0].strip()}".rstrip("/")
+
+    # 3) Development: use Cloudflare tunnel if available
     global _cloudflare_url
     if _cloudflare_url:
         return _cloudflare_url.rstrip("/")
 
-    return str(request_base_url).rstrip("/")
+    # 4) Fallback: request URL (e.g. http://localhost:8000)
+    if request_base_url:
+        return str(request_base_url).rstrip("/")
+    return ""

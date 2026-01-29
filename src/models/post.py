@@ -18,7 +18,7 @@ class PostStatus(str, Enum):
 
 class PostMedia(BaseModel):
     """Media file for a post"""
-    media_type: str = Field(..., description="Type: image, video, carousel")
+    media_type: str = Field(..., description="Type: image, video, reels, carousel")
     url: Optional[HttpUrl] = None
     local_path: Optional[str] = None
     caption: Optional[str] = None

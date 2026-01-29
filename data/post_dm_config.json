@@ -1,137 +1,38 @@
 {
-  "1405915827600672:18094767112753326": {
+  "1405915827600672:17911360731143000": {
     "account_id": "1405915827600672",
-    "media_id": "18094767112753326",
-    "file_url": null,
-    "file_path": null,
-    "trigger_mode": "AUTO",
-    "trigger_word": ""
-  },
-  "1405915827600672:17964606291008727": {
-    "account_id": "1405915827600672",
-    "media_id": "17964606291008727",
-    "file_url": "file:///\"C:/Users/kanis/Downloads/1-1-Network-Topology-Worksheet.pdf\"",
-    "file_path": "\"C:\\Users\\kanis\\Downloads\\1-1-Network-Topology-Worksheet.pdf\"",
-    "trigger_mode": "AUTO",
-    "trigger_word": null
-  },
-  "1405915827600672:18090444838838043": {
-    "account_id": "1405915827600672",
-    "media_id": "18090444838838043",
-    "file_url": "https://resources.finalsite.net/images/v1666625721/shelton/ljugguf3qpyeil2wvbni/cats.pdf",
-    "file_path": null,
-    "trigger_mode": "AUTO",
-    "trigger_word": ""
-  },
-  "1405915827600672:18130187242519495": {
-    "account_id": "1405915827600672",
-    "media_id": "18130187242519495",
-    "file_url": "file:///\"C:/Users/kanis/Downloads/1-1-Network-Topology-Worksheet.pdf\"",
-    "file_path": "\"C:\\Users\\kanis\\Downloads\\1-1-Network-Topology-Worksheet.pdf\"",
-    "trigger_mode": "AUTO",
-    "trigger_word": null
-  },
-  "1405915827600672:18107376661668532": {
-    "account_id": "1405915827600672",
-    "media_id": "18107376661668532",
-    "file_url": "https://www.instagram.com/mr_tony.87/",
-    "file_path": null,
-    "trigger_mode": "AUTO",
-    "trigger_word": "AUTO"
-  },
-  "1405915827600672:18093378395493574": {
-    "account_id": "1405915827600672",
-    "media_id": "18093378395493574",
-    "file_url": "https://1024terabox.com/s/1KBshGaG48qQ8ILoIJLdWwQ",
+    "media_id": "17911360731143000",
+    "file_url": "https://app.manychat.com/fb4239648/dashboard",
     "file_path": null,
     "trigger_mode": "KEYWORD",
-    "trigger_word": "link"
-  },
-  "1405915827600672:18356359792166760": {
-    "account_id": "1405915827600672",
-    "media_id": "18356359792166760",
-    "file_url": "file:///C:/Users/kanis/Downloads/cats.pdf",
-    "file_path": null,
-    "trigger_mode": "KEYWORD",
-    "trigger_word": "send "
-  },
-  "1405915827600672:18092499121817945": {
-    "account_id": "1405915827600672",
-    "media_id": "18092499121817945",
-    "file_url": "https://arkansas-performance-scene-lip.trycloudflare.com ",
-    "file_path": null,
-    "trigger_mode": "KEYWORD",
-    "trigger_word": "send"
-  },
-  "1405915827600672:17900703351362952": {
-    "account_id": "1405915827600672",
-    "media_id": "17900703351362952",
-    "file_url": "\"C:\\Users\\kanis\\Downloads\\cats.pdf\"",
-    "file_path": null,
-    "trigger_mode": "KEYWORD",
-    "trigger_word": "SENDME"
-  },
-  "1405915827600672:18084736790165015": {
-    "account_id": "1405915827600672",
-    "media_id": "18084736790165015",
-    "file_url": "file:///C:/Users/kanis/Downloads/cats.pdf",
-    "file_path": null,
-    "trigger_mode": "AUTO",
-    "trigger_word": "AUTO",
+    "trigger_word": "sendme ",
     "ai_enabled": true
   },
-  "1405915827600672:17955729162051783": {
+  "1405915827600672:18102753595872222": {
     "account_id": "1405915827600672",
-    "media_id": "17955729162051783",
-    "file_url": "file:///C:/Users/kanis/Downloads/cats.pdf",
+    "media_id": "18102753595872222",
+    "file_url": "https://app.manychat.com/fb4239648/dashboard",
     "file_path": null,
-    "trigger_mode": "AUTO",
-    "trigger_word": "AUTO",
+    "trigger_mode": "KEYWORD",
+    "trigger_word": "sendme ",
     "ai_enabled": true
   },
-  "1405915827600672:18094795850500185": {
+  "1405915827600672:18089528108046939": {
     "account_id": "1405915827600672",
-    "media_id": "18094795850500185",
+    "media_id": "18089528108046939",
     "file_url": "https://app.manychat.com/fb4239648/dashboard",
     "file_path": null,
     "trigger_mode": "AUTO",
     "trigger_word": "AUTO",
     "ai_enabled": true
   },
-  "1405915827600672:18405601066124526": {
+  "1405915827600672:17868665652542798": {
     "account_id": "1405915827600672",
-    "media_id": "18405601066124526",
-    "file_url": "https://cdnbbsr.s3waas.gov.in/s3ec0175b9b6dc7fe44437c6e0a69fd863/uploads/2023/02/2023022493.pdf",
-    "file_path": null,
-    "trigger_mode": "AUTO",
-    "trigger_word": "AUTO",
-    "ai_enabled": true
-  },
-  "1405915827600672:18080616547992928": {
-    "account_id": "1405915827600672",
-    "media_id": "18080616547992928",
+    "media_id": "17868665652542798",
     "file_url": "https://app.manychat.com/fb4239648/dashboard",
     "file_path": null,
-    "trigger_mode": "AUTO",
-    "trigger_word": "AUTO",
-    "ai_enabled": true
-  },
-  "1405915827600672:17909946657303282": {
-    "account_id": "1405915827600672",
-    "media_id": "17909946657303282",
-    "file_url": "https://app.manychat.com/fb4239648/dashboard",
-    "file_path": null,
-    "trigger_mode": "AUTO",
-    "trigger_word": "AUTO",
-    "ai_enabled": true
-  },
-  "17841457878364664:17910774783143513": {
-    "account_id": "17841457878364664",
-    "media_id": "17910774783143513",
-    "file_url": "https://app.manychat.com/fb4239648/dashboard",
-    "file_path": null,
-    "trigger_mode": "AUTO",
-    "trigger_word": "AUTO",
+    "trigger_mode": "KEYWORD",
+    "trigger_word": "sendme ",
     "ai_enabled": true
   }
 }

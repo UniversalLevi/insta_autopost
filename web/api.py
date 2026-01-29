@@ -42,6 +42,15 @@ from src.services.batch_campaign_store import get_campaign, get_all_campaigns
 from src.utils.logger import get_logger
 from src.auth.meta_oauth import get_meta_login_url, META_APP_ID, META_APP_SECRET, META_REDIRECT_URI
 from src.auth.oauth_helper import OAuthHelper
+from src.auth.user_auth import hash_password, verify_password, create_session, logout_session
+from src.services.user_store import user_store
+from src.models.user import User
+from web.auth_deps import get_current_user, require_admin, require_auth
+from src.auth.user_auth import hash_password, verify_password, create_session, logout_session, validate_session
+from src.services.user_store import user_store
+from src.models.user import User
+from web.auth_deps import get_current_user, require_admin, require_auth
+from fastapi.responses import Response
 
 try:
     from .cloudflare_helper import get_cloudflare_url
@@ -78,7 +87,7 @@ def _is_own_server_url(url: str, request: Request) -> bool:
     """Return True if the URL points to this app's own server (same host as public base URL)."""
     try:
         from .cloudflare_helper import get_base_url
-        app_base = get_base_url(str(request.base_url))
+        app_base = get_base_url(str(request.base_url), request.headers if request else None)
         if not app_base:
             return False
         parsed_url = urlparse(url)
@@ -333,16 +342,452 @@ async def auth_meta_callback(request: Request):
         raise HTTPException(status_code=500, detail=f"Token exchange failed: {str(e)}")
 
 
+# --- User Authentication Endpoints ---
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class RegisterRequest(BaseModel):
+    username: str
+    email: Optional[str] = None
+    password: str
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@auth_router.post("/login")
+async def login(request: Request, login_data: LoginRequest):
+    """Login with username and password"""
+    try:
+        user = user_store.find_by_username(login_data.username)
+        
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid username or password")
+        
+        if not user.is_active:
+            raise HTTPException(status_code=403, detail="Account is inactive. Please contact an administrator.")
+        
+        if not verify_password(login_data.password, user.password_hash):
+            raise HTTPException(status_code=401, detail="Invalid username or password")
+        
+        # Create session
+        token = create_session(user.id)
+        
+        # Create response with cookie
+        response = JSONResponse({
+            "status": "success",
+            "message": "Login successful",
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "role": user.role,
+            },
+            "token": token,
+        })
+        
+        # Set cookie (24 hours, httpOnly, secure in production)
+        response.set_cookie(
+            key="session_token",
+            value=token,
+            max_age=24 * 60 * 60,  # 24 hours
+            httponly=True,
+            secure=os.getenv("ENVIRONMENT", "development") == "production",
+            samesite="lax",
+        )
+        
+        return response
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Login error", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
+
+
+@auth_router.post("/logout")
+async def logout(request: Request):
+    """Logout and clear session"""
+    try:
+        from web.auth_deps import get_session_token
+        token = get_session_token(request)
+        
+        if token:
+            logout_session(token)
+        
+        response = JSONResponse({"status": "success", "message": "Logged out"})
+        response.delete_cookie(key="session_token")
+        return response
+    except Exception as e:
+        logger.exception("Logout error", error=str(e))
+        response = JSONResponse({"status": "success", "message": "Logged out"})
+        response.delete_cookie(key="session_token")
+        return response
+
+
+@auth_router.post("/register")
+async def register(register_data: RegisterRequest):
+    """Self-register a new user (creates active account, no approval needed)"""
+    try:
+        # Validate password length
+        if len(register_data.password) < 8:
+            raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+        
+        # Check if username already exists
+        if user_store.find_by_username(register_data.username):
+            raise HTTPException(status_code=400, detail="Username already exists")
+        
+        # Create active user (no admin approval needed)
+        import uuid
+        new_user = User(
+            id=str(uuid.uuid4()),
+            username=register_data.username,
+            email=register_data.email,
+            password_hash=hash_password(register_data.password),
+            role="user",
+            created_at=datetime.utcnow().isoformat(),
+            is_active=True,  # Active immediately, no approval needed
+            created_by=None,  # Self-registered
+        )
+        
+        user_store.create_user(new_user)
+        
+        # Auto-login the user after registration
+        token = create_session(new_user.id)
+        
+        # Create response with cookie (same as login)
+        response = JSONResponse({
+            "status": "success",
+            "message": "Registration successful! You are now logged in.",
+            "user": {
+                "id": new_user.id,
+                "username": new_user.username,
+                "email": new_user.email,
+                "role": new_user.role,
+            },
+            "token": token,
+        })
+        
+        # Set cookie (24 hours, httpOnly, secure in production)
+        response.set_cookie(
+            key="session_token",
+            value=token,
+            max_age=24 * 60 * 60,  # 24 hours
+            httponly=True,
+            secure=os.getenv("ENVIRONMENT", "development") == "production",
+            samesite="lax",
+        )
+        
+        return response
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("Registration error", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
+
+
+@auth_router.get("/me")
+async def get_current_user_info(current_user: User = Depends(get_current_user)):
+    """Get current user information"""
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "email": current_user.email,
+        "role": current_user.role,
+        "is_active": current_user.is_active,
+        "created_at": current_user.created_at,
+    }
+
+
+@auth_router.post("/change-password")
+async def change_password(
+    password_data: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Change current user's password"""
+    try:
+        # Verify current password
+        if not verify_password(password_data.current_password, current_user.password_hash):
+            raise HTTPException(status_code=401, detail="Current password is incorrect")
+        
+        # Validate new password
+        if len(password_data.new_password) < 8:
+            raise HTTPException(status_code=400, detail="New password must be at least 8 characters")
+        
+        # Update password
+        user_store.update_user(current_user.id, password_hash=hash_password(password_data.new_password))
+        
+        return {"status": "success", "message": "Password changed successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Change password error", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to change password: {str(e)}")
+
+
+# --- User Management Endpoints (Admin Only) ---
+
+class CreateUserRequest(BaseModel):
+    username: str
+    email: Optional[str] = None
+    password: str
+    role: str = "user"
+
+class UpdateUserRequest(BaseModel):
+    username: Optional[str] = None
+    email: Optional[str] = None
+    role: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+@router.get("/users")
+async def list_users(admin: User = Depends(require_admin)):
+    """List all users (admin only)"""
+    try:
+        users = user_store.load_users()
+        return {
+            "users": [
+                {
+                    "id": user.id,
+                    "username": user.username,
+                    "email": user.email,
+                    "role": user.role,
+                    "is_active": user.is_active,
+                    "created_at": user.created_at,
+                    "created_by": user.created_by,
+                }
+                for user in users
+            ]
+        }
+    except Exception as e:
+        logger.exception("List users error", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to list users: {str(e)}")
+
+
+@router.post("/users")
+async def create_user(
+    user_data: CreateUserRequest,
+    admin: User = Depends(require_admin),
+):
+    """Create a new user (admin only)"""
+    try:
+        # Validate password
+        if len(user_data.password) < 8:
+            raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+        
+        # Validate role
+        if user_data.role not in ["admin", "user"]:
+            raise HTTPException(status_code=400, detail="Role must be 'admin' or 'user'")
+        
+        # Check if username exists
+        if user_store.find_by_username(user_data.username):
+            raise HTTPException(status_code=400, detail="Username already exists")
+        
+        # Create user
+        import uuid
+        new_user = User(
+            id=str(uuid.uuid4()),
+            username=user_data.username,
+            email=user_data.email,
+            password_hash=hash_password(user_data.password),
+            role=user_data.role,
+            created_at=datetime.utcnow().isoformat(),
+            is_active=True,  # Admin-created users are active by default
+            created_by=admin.id,
+        )
+        
+        user_store.create_user(new_user)
+        
+        return {
+            "status": "success",
+            "message": "User created successfully",
+            "user": {
+                "id": new_user.id,
+                "username": new_user.username,
+                "email": new_user.email,
+                "role": new_user.role,
+                "is_active": new_user.is_active,
+            },
+        }
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("Create user error", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to create user: {str(e)}")
+
+
+@router.put("/users/{user_id}")
+async def update_user(
+    user_id: str,
+    user_data: UpdateUserRequest,
+    admin: User = Depends(require_admin),
+):
+    """Update a user (admin only)"""
+    try:
+        user = user_store.find_by_id(user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Prevent admin from deactivating themselves
+        if user_id == admin.id and user_data.is_active is False:
+            raise HTTPException(status_code=400, detail="Cannot deactivate your own account")
+        
+        # Prevent changing role of last admin
+        if user.role == "admin" and user_data.role == "user":
+            users = user_store.load_users()
+            active_admins = [u for u in users if u.role == "admin" and u.is_active and u.id != user_id]
+            if not active_admins:
+                raise HTTPException(status_code=400, detail="Cannot change role of the last active admin")
+        
+        # Build update dict
+        updates = {}
+        if user_data.username is not None:
+            updates["username"] = user_data.username
+        if user_data.email is not None:
+            updates["email"] = user_data.email
+        if user_data.role is not None:
+            if user_data.role not in ["admin", "user"]:
+                raise HTTPException(status_code=400, detail="Role must be 'admin' or 'user'")
+            updates["role"] = user_data.role
+        if user_data.is_active is not None:
+            updates["is_active"] = user_data.is_active
+        
+        updated_user = user_store.update_user(user_id, **updates)
+        
+        return {
+            "status": "success",
+            "message": "User updated successfully",
+            "user": {
+                "id": updated_user.id,
+                "username": updated_user.username,
+                "email": updated_user.email,
+                "role": updated_user.role,
+                "is_active": updated_user.is_active,
+            },
+        }
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("Update user error", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to update user: {str(e)}")
+
+
+@router.delete("/users/{user_id}")
+async def delete_user(
+    user_id: str,
+    admin: User = Depends(require_admin),
+):
+    """Delete a user (admin only)"""
+    try:
+        user = user_store.find_by_id(user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Prevent admin from deleting themselves
+        if user_id == admin.id:
+            raise HTTPException(status_code=400, detail="Cannot delete your own account")
+        
+        user_store.delete_user(user_id)
+        
+        return {"status": "success", "message": "User deleted successfully"}
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("Delete user error", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to delete user: {str(e)}")
+
+
+@router.post("/users/{user_id}/activate")
+async def activate_user(
+    user_id: str,
+    admin: User = Depends(require_admin),
+):
+    """Activate a user (admin only)"""
+    try:
+        user = user_store.find_by_id(user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        updated_user = user_store.update_user(user_id, is_active=True)
+        
+        return {
+            "status": "success",
+            "message": "User activated successfully",
+            "user": {
+                "id": updated_user.id,
+                "username": updated_user.username,
+                "is_active": updated_user.is_active,
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Activate user error", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to activate user: {str(e)}")
+
+
+@router.post("/users/{user_id}/deactivate")
+async def deactivate_user(
+    user_id: str,
+    admin: User = Depends(require_admin),
+):
+    """Deactivate a user (admin only)"""
+    try:
+        user = user_store.find_by_id(user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Prevent admin from deactivating themselves
+        if user_id == admin.id:
+            raise HTTPException(status_code=400, detail="Cannot deactivate your own account")
+        
+        updated_user = user_store.update_user(user_id, is_active=False)
+        
+        return {
+            "status": "success",
+            "message": "User deactivated successfully",
+            "user": {
+                "id": updated_user.id,
+                "username": updated_user.username,
+                "is_active": updated_user.is_active,
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Deactivate user error", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to deactivate user: {str(e)}")
+
+
 # --- Account Management Endpoints ---
 
 @router.get("/config/accounts")
-async def get_accounts():
-    """List all accounts"""
+async def get_accounts(current_user: User = Depends(require_auth)):
+    """List all accounts (filtered by ownership for regular users)"""
     accounts = config_manager.load_accounts()
+    
+    # Regular users only see their own accounts, admins see all
+    if current_user.role != "admin":
+        accounts = [acc for acc in accounts if acc.owner_id == current_user.id or acc.owner_id is None]
+    
     return {"accounts": [acc.dict() for acc in accounts]}
 
 @router.post("/config/accounts/add")
-async def add_account(account: Account, app: InstaForgeApp = Depends(get_app)):
+async def add_account(
+    account: Account,
+    app: InstaForgeApp = Depends(get_app),
+    current_user: User = Depends(require_auth),
+):
     """Add a new account"""
     try:
         accounts = config_manager.load_accounts()
@@ -350,6 +795,13 @@ async def add_account(account: Account, app: InstaForgeApp = Depends(get_app)):
         # Check for duplicate ID
         if any(acc.account_id == account.account_id for acc in accounts):
             raise HTTPException(status_code=400, detail=f"Account ID {account.account_id} already exists")
+        
+        # Set owner_id for regular users (admins can set it explicitly or leave None)
+        if current_user.role != "admin":
+            account = Account(**{**account.dict(), "owner_id": current_user.id})
+        elif account.owner_id is None:
+            # Admin can leave owner_id as None to make it visible to all
+            pass
             
         accounts.append(account)
         config_manager.save_accounts(accounts)
@@ -363,7 +815,12 @@ async def add_account(account: Account, app: InstaForgeApp = Depends(get_app)):
         raise HTTPException(status_code=500, detail=f"Failed to add account: {str(e)}")
 
 @router.put("/config/accounts/{account_id}")
-async def update_account(account_id: str, account_update: Account, app: InstaForgeApp = Depends(get_app)):
+async def update_account(
+    account_id: str,
+    account_update: Account,
+    app: InstaForgeApp = Depends(get_app),
+    current_user: User = Depends(require_auth),
+):
     """Update an existing account"""
     try:
         # Ensure ID matches
@@ -395,10 +852,28 @@ async def update_account(account_id: str, account_update: Account, app: InstaFor
         raise HTTPException(status_code=500, detail=f"Failed to update account: {str(e)}")
 
 @router.delete("/config/accounts/{account_id}")
-async def delete_account(account_id: str, app: InstaForgeApp = Depends(get_app)):
+async def delete_account(
+    account_id: str,
+    app: InstaForgeApp = Depends(get_app),
+    current_user: User = Depends(require_auth),
+):
     """Delete an account"""
     try:
         accounts = config_manager.load_accounts()
+        
+        # Check ownership (regular users can only delete their own accounts)
+        found_account = None
+        for acc in accounts:
+            if acc.account_id == account_id:
+                found_account = acc
+                break
+        
+        if not found_account:
+            raise HTTPException(status_code=404, detail="Account not found")
+        
+        # Regular users can only delete their own accounts
+        if current_user.role != "admin" and found_account.owner_id != current_user.id:
+            raise HTTPException(status_code=403, detail="You can only delete your own accounts")
         
         initial_len = len(accounts)
         accounts = [acc for acc in accounts if acc.account_id != account_id]
@@ -421,13 +896,17 @@ async def delete_account(account_id: str, app: InstaForgeApp = Depends(get_app))
 # --- Global Settings Endpoints ---
 
 @router.get("/config/settings")
-async def get_settings():
-    """Get global settings"""
+async def get_settings(admin: User = Depends(require_admin)):
+    """Get global settings (admin only)"""
     settings = config_manager.load_settings()
     return settings.dict()
 
 @router.put("/config/settings")
-async def update_settings(settings: Settings, app: InstaForgeApp = Depends(get_app)):
+async def update_settings(
+    settings: Settings,
+    app: InstaForgeApp = Depends(get_app),
+    admin: User = Depends(require_admin),
+):
     """Update global settings"""
     try:
         config_manager.save_settings(settings)
@@ -448,7 +927,12 @@ async def update_settings(settings: Settings, app: InstaForgeApp = Depends(get_a
 # --- Execution Endpoints ---
 
 @router.post("/posts/create", response_model=PostResponse)
-async def create_post(request: Request, post_data: CreatePostRequest, app: InstaForgeApp = Depends(get_app)):
+async def create_post(
+    request: Request,
+    post_data: CreatePostRequest,
+    app: InstaForgeApp = Depends(get_app),
+    current_user: User = Depends(require_auth),
+):
     """Create a new post"""
     try:
         # Keep reels as reels (don't convert to video - Instagram API needs REELS type)
@@ -488,26 +972,82 @@ async def create_post(request: Request, post_data: CreatePostRequest, app: Insta
         
         # URL validation (always, including scheduled)
         for url in post_data.urls:
-            # Check for invalid protocols
+            # Same-origin (our uploads): always allow — video/reels from your server
+            if _is_own_server_url(url, request):
+                continue
+            # Non–same-origin: require public HTTPS
             if "localhost" in url or "127.0.0.1" in url or url.startswith("http://"):
                 raise HTTPException(status_code=400, detail="Instagram requires public HTTPS URLs.")
             
-            # Block unreliable tunnel hosts for video/reels unless URL is our own server
+            # Block unreliable tunnel hosts for video/reels (same-origin already allowed above)
             if media_type in ("video", "reels"):
-                if _is_own_server_url(url, request):
-                    # Same-origin: video served from our uploads — allowed (no external host needed)
-                    pass
-                else:
-                    unreliable_hosts = ["trycloudflare.com", "ngrok.io", "ngrok-free.app"]
-                    if any(host in url.lower() for host in unreliable_hosts):
+                unreliable_hosts = ["trycloudflare.com", "ngrok.io", "ngrok-free.app"]
+                if any(host in url.lower() for host in unreliable_hosts):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                                f"{media_type.capitalize()} posts: Use “Upload Media” to upload from your device — the file is stored on your server and published to Instagram. Set BASE_URL in production."
+                        )
+                    )
+                
+                # Pre-flight validation for video/reels URLs (test before posting)
+                try:
+                    import requests
+                    headers = {
+                        "User-Agent": "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
+                        "Accept": "video/*,*/*",
+                    }
+                    test_response = requests.head(url, headers=headers, timeout=10, allow_redirects=True)
+                    
+                    if test_response.status_code != 200:
                         raise HTTPException(
                             status_code=400,
                             detail=(
-                                f"⚠️ {media_type.capitalize()} posts: Cloudflare tunnels and ngrok are unreliable for video/reels.\n\n"
-                                f"✅ Use your own server: upload the file with “Upload file” so the video is served from this app. "
-                                f"In production, set BASE_URL (or APP_URL) to your public HTTPS domain so Instagram can fetch the file."
+                                f"{media_type.capitalize()} URL returned status {test_response.status_code}. "
+                                f"Use “Upload Media” to upload from your device instead — the file is stored on your server and published to Instagram."
                             )
                         )
+                    
+                    content_type = test_response.headers.get("Content-Type", "").lower()
+                    if "text/html" in content_type:
+                        # Try GET to see what we're getting
+                        try:
+                            get_response = requests.get(url, headers=headers, timeout=5, allow_redirects=True)
+                            error_preview = get_response.text[:200] if get_response.text else ""
+                            raise HTTPException(
+                                status_code=400,
+                                detail=(
+                                    f"{media_type.capitalize()} URL returns a page instead of a video file. "
+                                    f"Use “Upload Media” to upload from your device — the file is stored on your server and published to Instagram."
+                                )
+                            )
+                        except HTTPException:
+                            raise
+                        except Exception:
+                            pass
+                    
+                    if not any(ct in content_type for ct in ["video/", "application/octet-stream"]):
+                        raise HTTPException(
+                            status_code=400,
+                            detail=(
+                                f"⚠️ {media_type.capitalize()} URL has wrong Content-Type:\n\n"
+                                f"URL: {url}\n"
+                                f"Content-Type: {content_type}\n\n"
+                                f"Expected: video/mp4, video/quicktime, or application/octet-stream\n"
+                                f"Got: {content_type}\n\n"
+                                f"Instagram may not accept this URL. Use a direct video file URL."
+                            )
+                        )
+                except HTTPException:
+                    raise
+                except Exception as e:
+                    # If validation fails but it's not a clear error, log and continue
+                    # Instagram will verify anyway and return a clear error
+                    logger.warning(
+                        "URL validation had issues, continuing - Instagram will verify",
+                        url=url,
+                        error=str(e),
+                    )
 
         is_scheduled = post_data.scheduled_time is not None
 
@@ -677,7 +1217,10 @@ async def get_logs(lines: int = 100, level: Optional[str] = None):
 # --- Status & Utils ---
 
 @router.get("/status", response_model=StatusResponse)
-async def get_status(app: InstaForgeApp = Depends(get_app)):
+async def get_status(
+    app: InstaForgeApp = Depends(get_app),
+    current_user: User = Depends(require_auth),
+):
     """Get system status"""
     try:
         accounts = app.account_service.list_accounts()
@@ -709,7 +1252,10 @@ async def get_status(app: InstaForgeApp = Depends(get_app)):
 
 
 @router.post("/warming/run")
-async def run_warming_now(app: InstaForgeApp = Depends(get_app)):
+async def run_warming_now(
+    app: InstaForgeApp = Depends(get_app),
+    current_user: User = Depends(require_auth),
+):
     """Manually trigger warming actions for all accounts"""
     try:
         logger.info("Manual warming trigger requested")
@@ -726,7 +1272,10 @@ async def run_warming_now(app: InstaForgeApp = Depends(get_app)):
 
 
 @router.get("/warming/status")
-async def get_warming_status(app: InstaForgeApp = Depends(get_app)):
+async def get_warming_status(
+    app: InstaForgeApp = Depends(get_app),
+    current_user: User = Depends(require_auth),
+):
     """Get warming status for all accounts"""
     try:
         accounts = app.account_service.list_accounts()
@@ -762,7 +1311,7 @@ async def upload_files(request: Request, files: List[UploadFile] = File(...)):
         
         uploaded_urls = []
         from .cloudflare_helper import get_base_url
-        base_url = get_base_url(str(request.base_url))
+        base_url = get_base_url(str(request.base_url), request.headers if request else None)
         
         for file in files:
             if not file.content_type or not (file.content_type.startswith("image/") or file.content_type.startswith("video/")):
@@ -805,7 +1354,7 @@ async def batch_upload(
     """
     try:
         from .cloudflare_helper import get_base_url
-        base_url = get_base_url(str(request.base_url))
+        base_url = get_base_url(str(request.base_url), request.headers if request else None)
         
         # Parse start_date
         try:
@@ -948,7 +1497,7 @@ async def batch_upload(
             if extract_dir.is_dir() and not any(extract_dir.iterdir()):
                 try:
                     extract_dir.rmdir()
-                except:
+                except OSError:
                     pass
         
         # Process batch upload (create campaign and schedule posts)
@@ -1033,7 +1582,7 @@ async def verify_url(url: str):
             try:
                 get_response = await run_in_threadpool(requests.get, url, headers=headers, timeout=5, allow_redirects=True)
                 error_preview = get_response.text[:200] if get_response.text else None
-            except:
+            except Exception:
                 pass
         
         return {
@@ -1180,6 +1729,7 @@ async def test_ai_reply(
 async def get_ai_profile(
     account_id: Optional[str] = None,
     app: InstaForgeApp = Depends(get_app),
+    current_user: User = Depends(require_auth),
 ):
     """Get AI profile for an account"""
     try:
@@ -1225,6 +1775,7 @@ async def get_ai_profile(
 @router.post("/ai/profile/update")
 async def update_ai_profile(
     account_id: Optional[str] = Form(None),
+    current_user: User = Depends(require_auth),
     brand_name: Optional[str] = Form(None),
     business_type: Optional[str] = Form(None),
     tone: Optional[str] = Form(None),
@@ -1460,30 +2011,31 @@ async def test_ai_dm_status(app: InstaForgeApp = Depends(get_app)):
 @router.get("/webhooks/callback-url")
 async def get_webhook_callback_url():
     """
-    Return the Instagram webhook callback URL for Meta app configuration.
-    Use the Cloudflare tunnel URL when available (development/testing).
-    IMPORTANT: In Meta, set Callback URL to the value of callback_url below.
-    Do NOT use this /api/webhooks/callback-url endpoint as the Callback URL.
+    Return the Instagram webhook configuration for Meta app.
+    In Meta app: set Callback URL to production_url (e.g. https://veilforce.com/webhooks/instagram).
+    Do NOT use this /api/webhooks/callback-url path as the Callback URL in Meta.
     """
     from .cloudflare_helper import get_cloudflare_url
     verify_token = os.environ.get("WEBHOOK_VERIFY_TOKEN", "my_test_token_for_instagram_verification")
     
-    # Check if BASE_URL is set (production)
     BASE_URL = os.getenv("BASE_URL", "").strip().rstrip("/")
     if BASE_URL:
         callback_url = f"{BASE_URL}/webhooks/instagram"
+        production_url = callback_url
     else:
         base = get_cloudflare_url()
         if base:
             callback_url = f"{base.rstrip('/')}/webhooks/instagram"
         else:
             callback_url = None
+        production_url = "https://veilforce.com/webhooks/instagram"
     
     return {
-        "callback_url": callback_url or "https://veilforce.com/webhooks/instagram",
+        "callback_url": callback_url or production_url,
         "verify_token": verify_token,
-        "production_url": "https://veilforce.com/webhooks/instagram",
-        "note": "In Meta app: Callback URL = production_url above; Verify token = verify_token above. Do NOT use /api/webhooks/callback-url as Callback URL.",
+        "production_url": production_url,
+        "meta_callback_url": production_url,
+        "note": "In Meta app: set Callback URL to production_url; set Verify token to verify_token above. On veilforce.com server set BASE_URL=https://veilforce.com. Do NOT use /api/webhooks/callback-url as Callback URL.",
     }
 
 
