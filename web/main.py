@@ -514,8 +514,9 @@ async def shutdown_event():
             if instaforge_app.comment_monitor:
                 logger.info("Stopping comment monitor...")
                 instaforge_app.comment_monitor.stop_monitoring_all_accounts()
-        except Exception as e:
+        except BaseException as e:
             logger.warning("Error stopping comment monitor", error=str(e))
+            # Do not re-raise: allow remaining shutdown steps to run
         
         try:
             if instaforge_app.account_health_service:
@@ -592,6 +593,13 @@ async def logs_page(request: Request):
 async def accounts_page(request: Request):
     """Account status dashboard page"""
     content = await render_template_async("accounts.html", {"request": request})
+    return HTMLResponse(content=content)
+
+
+@app.get("/schedule", response_class=HTMLResponse)
+async def schedule_page(request: Request):
+    """Schedule queue and failed posts page"""
+    content = render_template("schedule.html", {"request": request})
     return HTMLResponse(content=content)
 
 

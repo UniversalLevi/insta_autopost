@@ -253,7 +253,7 @@ class InstaForgeApp:
         try:
             # Reload accounts from config
             new_accounts = config_manager.load_accounts()
-            old_account_ids = set(self.account_service.list_accounts())
+            old_account_ids = {acc.account_id for acc in self.account_service.list_accounts()}
             new_account_ids = {acc.account_id for acc in new_accounts}
             
             # Find added, removed, and updated accounts

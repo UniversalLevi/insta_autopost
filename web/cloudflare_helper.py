@@ -139,44 +139,21 @@ def get_cloudflare_url() -> Optional[str]:
     return _cloudflare_url
 
 
-def get_upload_base_url(request_base_url: str = "", request_headers=None) -> Optional[str]:
-    """
-    Base URL used only for building /uploads/... URLs. Never returns Cloudflare tunnel or ngrok
-    so Instagram can access media. Use BASE_URL or proxy headers; if request is from tunnel and
-    BASE_URL is unset, returns None (caller should return 400).
-    """
-    # 1) Production: use BASE_URL or APP_URL (your public HTTPS domain)
+def get_current_public_base_url() -> str:
+    """Return current public base URL for background use (no request). Prefers BASE_URL/APP_URL, then Cloudflare tunnel."""
     base = os.getenv("BASE_URL") or os.getenv("APP_URL")
     if base:
-        base = base.strip().rstrip("/")
-        if base.lower().startswith("https://") and "localhost" not in base.lower() and "127.0.0.1" not in base:
-            return base
-        # HTTP or localhost in BASE_URL: Instagram cannot use it
-        return None
-
-    # 2) Behind a proxy (Render, Heroku, nginx): HTTPS only so Instagram can access
-    if request_headers:
-        proto = (request_headers.get("X-Forwarded-Proto") or request_headers.get("X-Forwarded-Protocol") or "").strip().lower()
-        host = (request_headers.get("X-Forwarded-Host") or request_headers.get("Host") or "").split(",")[0].strip()
-        if proto == "https" and host and "localhost" not in host.lower() and "127.0.0.1" not in host:
-            return f"https://{host}".rstrip("/")
-
-    # 3) Do NOT use Cloudflare tunnel or ngrok for upload URLs (Instagram cannot access them)
-    req = (request_base_url or "").strip().rstrip("/").lower()
-    if "trycloudflare.com" in req or "ngrok" in req:
-        return None
-
-    # 4) Fallback: request URL — but not localhost/HTTP (Instagram cannot access; require BASE_URL)
-    if request_base_url:
-        fallback = str(request_base_url).rstrip("/")
-        if "localhost" in fallback or "127.0.0.1" in fallback or fallback.strip().lower().startswith("http://"):
-            return None
-        return fallback
+        return (base or "").strip().rstrip("/")
+    global _cloudflare_url
+    if _cloudflare_url:
+        return _cloudflare_url.rstrip("/")
     return ""
 
 
 def get_base_url(request_base_url: str = "", request_headers=None) -> str:
     """Get base URL for serving uploads. Prefers BASE_URL, then proxy headers, then Cloudflare tunnel, then request."""
+    import os
+
     # 1) Production: use BASE_URL or APP_URL (your public HTTPS domain)
     base = os.getenv("BASE_URL") or os.getenv("APP_URL")
     if base:

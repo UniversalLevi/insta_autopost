@@ -1,3 +1,302 @@
 {
-  "posts": []
+  "posts": [
+    {
+      "id": "9cdf057a-138a-426f-a7a9-0820ffc3a965",
+      "account_id": "1405915827600672",
+      "media_type": "image",
+      "urls": [
+        "https://veilforce.com/uploads/batch/d9368fed-0a17-42bb-8684-8c62627f377e/day_09.jpg"
+      ],
+      "caption": "",
+      "hashtags": [
+        "3dev"
+      ],
+      "scheduled_time": "2026-01-28T21:55:00",
+      "status": "failed",
+      "created_at": "2026-01-26T08:23:21.124722",
+      "auto_dm_enabled": false,
+      "auto_dm_link": null,
+      "auto_dm_mode": "AUTO",
+      "auto_dm_trigger": null,
+      "auto_dm_ai_enabled": false,
+      "error_message": "Failed to publish post: Instagram cannot access the media URL (error 9004/2207052).\nThis usually means:\n1) The URL is not publicly accessible\n2) The server is blocking Instagram's bot/crawler\n3) The URL is returning HTML instead of the media file\n4) The server requires authentication or has CORS restrictions\n\nSOLUTION: Ensure the URL is publicly accessible via HTTPS.\nFor your own server, set BASE_URL to your public domain.\n\nURL: https://veilforce.com/uploads/batch/d9368fed-0a17-42bb-8684-8c62627f377e/day_09.jpg\nOriginal error: InstagramAPIError: OAuthException: Only photo or video can be accepted as media type. (code: 9004) (code: 9004) (code: 9004, subcode: 2207052)",
+      "failed_at": "2026-01-28T17:43:35.456586"
+    },
+    {
+      "id": "eb790b87-5c93-491f-96c9-c11d870cb73e",
+      "account_id": "1405915827600672",
+      "media_type": "image",
+      "urls": [
+        "https://veilforce.com/uploads/batch/60cbd77c-704c-4a2e-aecc-e761549ff3b7/day_06.jpg"
+      ],
+      "caption": "",
+      "hashtags": [],
+      "scheduled_time": "2026-01-29T13:55:00",
+      "status": "failed",
+      "created_at": "2026-01-26T08:23:47.781239",
+      "auto_dm_enabled": false,
+      "auto_dm_link": null,
+      "auto_dm_mode": "AUTO",
+      "auto_dm_trigger": null,
+      "auto_dm_ai_enabled": false,
+      "error_message": "Failed to publish post: Instagram cannot access the media URL (error 9004/2207052).\nThis usually means:\n1) The URL is not publicly accessible\n2) The server is blocking Instagram's bot/crawler\n3) The URL is returning HTML instead of the media file\n4) The server requires authentication or has CORS restrictions\n\nSOLUTION: Ensure the URL is publicly accessible via HTTPS.\nFor your own server, set BASE_URL to your public domain.\n\nURL: https://veilforce.com/uploads/batch/60cbd77c-704c-4a2e-aecc-e761549ff3b7/day_06.jpg\nOriginal error: InstagramAPIError: OAuthException: Only photo or video can be accepted as media type. (code: 9004) (code: 9004) (code: 9004, subcode: 2207052)",
+      "failed_at": "2026-01-29T08:26:09.702834"
+    },
+    {
+      "id": "209fb25d-c8b8-4226-8ae4-206c4a3e0b4e",
+      "account_id": "1405915827600672",
+      "media_type": "image",
+      "urls": [
+        "https://veilforce.com/uploads/batch/60cbd77c-704c-4a2e-aecc-e761549ff3b7/day_07.jpg"
+      ],
+      "caption": "",
+      "hashtags": [],
+      "scheduled_time": "2026-01-29T01:55:00",
+      "status": "failed",
+      "created_at": "2026-01-26T08:23:47.787193",
+      "auto_dm_enabled": false,
+      "auto_dm_link": null,
+      "auto_dm_mode": "AUTO",
+      "auto_dm_trigger": null,
+      "auto_dm_ai_enabled": false,
+      "error_message": "Failed to publish post: Instagram cannot access the media URL (error 9004/2207052).\nThis usually means:\n1) The URL is not publicly accessible\n2) The server is blocking Instagram's bot/crawler\n3) The URL is returning HTML instead of the media file\n4) The server requires authentication or has CORS restrictions\n\nSOLUTION: Ensure the URL is publicly accessible via HTTPS.\nFor your own server, set BASE_URL to your public domain.\n\nURL: https://veilforce.com/uploads/batch/60cbd77c-704c-4a2e-aecc-e761549ff3b7/day_07.jpg\nOriginal error: InstagramAPIError: OAuthException: Only photo or video can be accepted as media type. (code: 9004) (code: 9004) (code: 9004, subcode: 2207052)",
+      "failed_at": "2026-01-29T08:26:30.955312"
+    },
+    {
+      "id": "4cfeeeba-d074-48c2-b60c-37406ee3ebd5",
+      "account_id": "1405915827600672",
+      "media_type": "image",
+      "urls": [
+        "https://veilforce.com/uploads/batch/60cbd77c-704c-4a2e-aecc-e761549ff3b7/day_08.jpg"
+      ],
+      "caption": "",
+      "hashtags": [],
+      "scheduled_time": "2026-01-30T13:55:00",
+      "status": "failed",
+      "created_at": "2026-01-26T08:23:47.792190",
+      "auto_dm_enabled": false,
+      "auto_dm_link": null,
+      "auto_dm_mode": "AUTO",
+      "auto_dm_trigger": null,
+      "auto_dm_ai_enabled": false,
+      "error_message": "Failed to publish post: Media URL returned status 404 instead of 200. This means Instagram's crawler cannot access the URL. Check: 1) File exists on server, 2) Apache is proxying /uploads/ correctly, 3) File permissions allow read access. URL: https://veilforce.com/uploads/batch/60cbd77c-704c-4a2e-aecc-e761549ff3b7/day_08.jpg",
+      "failed_at": "2026-02-01T10:31:05.596580"
+    },
+    {
+      "id": "65acaf5b-4d1c-46f5-a04e-c7a9016e1360",
+      "account_id": "1405915827600672",
+      "media_type": "image",
+      "urls": [
+        "https://veilforce.com/uploads/batch/60cbd77c-704c-4a2e-aecc-e761549ff3b7/day_09.jpg"
+      ],
+      "caption": "",
+      "hashtags": [],
+      "scheduled_time": "2026-01-30T01:55:00",
+      "status": "failed",
+      "created_at": "2026-01-26T08:23:47.797197",
+      "auto_dm_enabled": false,
+      "auto_dm_link": null,
+      "auto_dm_mode": "AUTO",
+      "auto_dm_trigger": null,
+      "auto_dm_ai_enabled": false,
+      "error_message": "Failed to publish post: Media URL returned status 404 instead of 200. This means Instagram's crawler cannot access the URL. Check: 1) File exists on server, 2) Apache is proxying /uploads/ correctly, 3) File permissions allow read access. URL: https://veilforce.com/uploads/batch/60cbd77c-704c-4a2e-aecc-e761549ff3b7/day_09.jpg",
+      "failed_at": "2026-02-01T10:31:06.150948"
+    },
+    {
+      "id": "14ecb736-5344-4f47-a351-da612cdfa664",
+      "account_id": "1405915827600672",
+      "media_type": "image",
+      "urls": [
+        "https://veilforce.com/uploads/batch/60cbd77c-704c-4a2e-aecc-e761549ff3b7/day_10.jpg"
+      ],
+      "caption": "",
+      "hashtags": [],
+      "scheduled_time": "2026-01-31T13:55:00",
+      "status": "failed",
+      "created_at": "2026-01-26T08:23:47.803199",
+      "auto_dm_enabled": false,
+      "auto_dm_link": null,
+      "auto_dm_mode": "AUTO",
+      "auto_dm_trigger": null,
+      "auto_dm_ai_enabled": false,
+      "error_message": "Failed to publish post: Media URL returned status 404 instead of 200. This means Instagram's crawler cannot access the URL. Check: 1) File exists on server, 2) Apache is proxying /uploads/ correctly, 3) File permissions allow read access. URL: https://veilforce.com/uploads/batch/60cbd77c-704c-4a2e-aecc-e761549ff3b7/day_10.jpg",
+      "failed_at": "2026-02-01T10:31:06.625874"
+    },
+    {
+      "id": "ea05f0c0-d401-4de8-aa07-89fad58ac98a",
+      "account_id": "1405915827600672",
+      "media_type": "image",
+      "urls": [
+        "https://veilforce.com/uploads/batch/5e96c344-590f-4da9-8ef8-e8c7cd59efde/day_06.jpg"
+      ],
+      "caption": "",
+      "hashtags": [],
+      "scheduled_time": "2026-01-28T21:26:00",
+      "status": "failed",
+      "created_at": "2026-01-26T15:53:39.579456",
+      "auto_dm_enabled": false,
+      "auto_dm_link": null,
+      "auto_dm_mode": "AUTO",
+      "auto_dm_trigger": null,
+      "auto_dm_ai_enabled": false,
+      "error_message": "Failed to publish post: Instagram cannot access the media URL (error 9004/2207052).\nThis usually means:\n1) The URL is not publicly accessible\n2) The server is blocking Instagram's bot/crawler\n3) The URL is returning HTML instead of the media file\n4) The server requires authentication or has CORS restrictions\n\nSOLUTION: Ensure the URL is publicly accessible via HTTPS.\nFor your own server, set BASE_URL to your public domain.\n\nURL: https://veilforce.com/uploads/batch/5e96c344-590f-4da9-8ef8-e8c7cd59efde/day_06.jpg\nOriginal error: InstagramAPIError: OAuthException: Only photo or video can be accepted as media type. (code: 9004) (code: 9004) (code: 9004, subcode: 2207052)",
+      "failed_at": "2026-01-28T15:57:58.797129"
+    },
+    {
+      "id": "3448c2ef-4821-4f98-8876-5cfcad430bae",
+      "account_id": "1405915827600672",
+      "media_type": "image",
+      "urls": [
+        "https://veilforce.com/uploads/batch/5e96c344-590f-4da9-8ef8-e8c7cd59efde/day_09.jpg"
+      ],
+      "caption": "",
+      "hashtags": [],
+      "scheduled_time": "2026-01-29T21:26:00",
+      "status": "failed",
+      "created_at": "2026-01-26T15:53:39.621034",
+      "auto_dm_enabled": false,
+      "auto_dm_link": null,
+      "auto_dm_mode": "AUTO",
+      "auto_dm_trigger": null,
+      "auto_dm_ai_enabled": false,
+      "error_message": "Failed to publish post: Media URL returned status 404 instead of 200. This means Instagram's crawler cannot access the URL. Check: 1) File exists on server, 2) Apache is proxying /uploads/ correctly, 3) File permissions allow read access. URL: https://veilforce.com/uploads/batch/5e96c344-590f-4da9-8ef8-e8c7cd59efde/day_09.jpg",
+      "failed_at": "2026-01-29T15:56:37.542605"
+    },
+    {
+      "id": "1e413b6e-9c27-4565-b77d-e5dccc7e5f84",
+      "account_id": "1405915827600672",
+      "media_type": "image",
+      "urls": [
+        "https://veilforce.com/uploads/batch/5e96c344-590f-4da9-8ef8-e8c7cd59efde/day_10.jpg"
+      ],
+      "caption": "",
+      "hashtags": [],
+      "scheduled_time": "2026-01-29T09:26:00",
+      "status": "failed",
+      "created_at": "2026-01-26T15:53:39.634626",
+      "auto_dm_enabled": false,
+      "auto_dm_link": null,
+      "auto_dm_mode": "AUTO",
+      "auto_dm_trigger": null,
+      "auto_dm_ai_enabled": false,
+      "error_message": "Failed to publish post: Instagram cannot access the media URL (error 9004/2207052).\nThis usually means:\n1) The URL is not publicly accessible\n2) The server is blocking Instagram's bot/crawler\n3) The URL is returning HTML instead of the media file\n4) The server requires authentication or has CORS restrictions\n\nSOLUTION: Ensure the URL is publicly accessible via HTTPS.\nFor your own server, set BASE_URL to your public domain.\n\nURL: https://veilforce.com/uploads/batch/5e96c344-590f-4da9-8ef8-e8c7cd59efde/day_10.jpg\nOriginal error: InstagramAPIError: OAuthException: Only photo or video can be accepted as media type. (code: 9004) (code: 9004) (code: 9004, subcode: 2207052)",
+      "failed_at": "2026-01-29T08:26:51.924779"
+    },
+    {
+      "id": "43697829-a8a4-4458-8b48-dd30af0a0b2e",
+      "account_id": "1405915827600672",
+      "media_type": "video",
+      "urls": [
+        "https://through-queue-forty-roles.trycloudflare.com/uploads/c45ef399-30ee-4884-81f9-7143bf1cfc40.mp4?t=1769585810"
+      ],
+      "caption": "",
+      "hashtags": [],
+      "scheduled_time": "2026-01-28T18:38:00",
+      "status": "failed",
+      "created_at": "2026-01-28T13:06:50.265225",
+      "auto_dm_enabled": true,
+      "auto_dm_link": "https://app.manychat.com/fb4239648/dashboard",
+      "auto_dm_mode": "AUTO",
+      "auto_dm_trigger": null,
+      "auto_dm_ai_enabled": true,
+      "error_message": "Failed to publish post: Instagram cannot access the media URL (error 100/2207067).\nThis usually means:\n1) The URL is not publicly accessible\n2) The server is blocking Instagram's bot/crawler\n3) The URL is returning HTML instead of the media file\n4) The server requires authentication or has CORS restrictions\n\nSOLUTION for VIDEO posts:\n\n\u2705 OPTION 1: Use your own server (recommended)\n1) Upload the file using 'Upload file' in InstaForge\n2) Set BASE_URL (or APP_URL) to your public HTTPS domain\n3) Ensure your server is publicly accessible\n4) The upload URL will be served from your server\n\n\u2705 OPTION 2: Use external hosting (if own server not available)\n1) Upload to Cloudinary, AWS S3, or Firebase Storage\n2) Copy the direct HTTPS URL\n3) Use 'Post by URL' and paste the URL\n\n\u274c DO NOT USE:\n\u2022 Cloudflare tunnels (trycloudflare.com) - unreliable\n\u2022 Ngrok - unreliable\n\u2022 Localhost URLs - Instagram cannot access them\n\nURL: https://through-queue-forty-roles.trycloudflare.com/uploads/c45ef399-30ee-4884-81f9-7143bf1cfc40.mp4\nOriginal error: InstagramAPIError: OAuthException: Invalid parameter (code: 100) (code: 100) (code: 100, subcode: 2207067)",
+      "failed_at": "2026-01-28T13:08:38.745924"
+    },
+    {
+      "id": "20f6f4fc-cfd8-46b1-befb-cc660b2e1d2e",
+      "account_id": "1405915827600672",
+      "media_type": "video",
+      "urls": [
+        "https://hartford-oscar-indicates-fix.trycloudflare.com/uploads/71c65134-4a4b-4595-9b72-791d85624d93.jpg?t=1769679914"
+      ],
+      "caption": "ewrfnj",
+      "hashtags": [],
+      "scheduled_time": "2026-01-29T20:47:00",
+      "status": "failed",
+      "created_at": "2026-01-29T15:15:14.226024",
+      "auto_dm_enabled": true,
+      "auto_dm_link": "https://app.manychat.com/fb4239648/dashboard",
+      "auto_dm_mode": "AUTO",
+      "auto_dm_trigger": null,
+      "auto_dm_ai_enabled": true,
+      "error_message": "Failed to publish post: Instagram cannot access the media URL (error 100/2207067).\nThis usually means:\n1) The URL is not publicly accessible\n2) The server is blocking Instagram's bot/crawler\n3) The URL is returning HTML instead of the media file\n4) The server requires authentication or has CORS restrictions\n\nSOLUTION: Ensure the URL is publicly accessible via HTTPS.\nFor your own server, set BASE_URL to your public domain.\n\nURL: https://hartford-oscar-indicates-fix.trycloudflare.com/uploads/71c65134-4a4b-4595-9b72-791d85624d93.jpg\nOriginal error: InstagramAPIError: OAuthException: Invalid parameter (code: 100) (code: 100) (code: 100, subcode: 2207067)",
+      "failed_at": "2026-01-29T15:17:57.403642"
+    },
+    {
+      "id": "81dce1b2-8628-46c9-91b8-88cb715c7599",
+      "account_id": "17841444586383008",
+      "media_type": "video",
+      "urls": [
+        "https://club-hearts-karen-livestock.trycloudflare.com/uploads/631a76e1-1812-4cbf-984c-2d36f6733e5b.mp4?t=1769923241"
+      ],
+      "caption": "fweer",
+      "hashtags": [],
+      "scheduled_time": "2026-02-01T16:21:00",
+      "status": "failed",
+      "created_at": "2026-02-01T10:50:41.348325",
+      "auto_dm_enabled": true,
+      "auto_dm_link": "https://app.manychat.com/fb4239648/dashboard",
+      "auto_dm_mode": "KEYWORD",
+      "auto_dm_trigger": "sendme ",
+      "auto_dm_ai_enabled": true,
+      "error_message": "Failed to publish post: Media URL returned status 530 instead of 200. This means Instagram's crawler cannot access the URL. Check: 1) File exists on server, 2) Apache is proxying /uploads/ correctly, 3) File permissions allow read access. URL: https://club-hearts-karen-livestock.trycloudflare.com/uploads/631a76e1-1812-4cbf-984c-2d36f6733e5b.mp4",
+      "failed_at": "2026-02-01T10:52:40.280962"
+    },
+    {
+      "id": "18ba9cb1-a8b6-47e4-803b-4d58d8922d06",
+      "account_id": "17841444586383008",
+      "media_type": "reels",
+      "urls": [
+        "https://mapping-prot-purchase-yours.trycloudflare.com/uploads/b4fa2236-47fc-4fe6-9f04-acc3fab47be3.mp4?t=1769923377"
+      ],
+      "caption": "",
+      "hashtags": [],
+      "scheduled_time": "2026-02-01T16:23:00",
+      "status": "failed",
+      "created_at": "2026-02-01T10:52:57.663079",
+      "auto_dm_enabled": true,
+      "auto_dm_link": "https://app.manychat.com/fb4239648/dashboard",
+      "auto_dm_mode": "KEYWORD",
+      "auto_dm_trigger": "sendme ",
+      "auto_dm_ai_enabled": true,
+      "error_message": "Failed to publish post: Media URL is not accessible: HTTPSConnectionPool(host='centers-messaging-winter-loved.trycloudflare.com', port=443): Max retries exceeded with url: /uploads/b4fa2236-47fc-4fe6-9f04-acc3fab47be3.mp4 (Caused by NameResolutionError(\"HTTPSConnection(host='centers-messaging-winter-loved.trycloudflare.com', port=443): Failed to resolve 'centers-messaging-winter-loved.trycloudflare.com' ([Errno 11001] getaddrinfo failed)\")). This usually means the domain is unreachable or DNS is failing. URL: https://centers-messaging-winter-loved.trycloudflare.com/uploads/b4fa2236-47fc-4fe6-9f04-acc3fab47be3.mp4 (code: 9004, subcode: None)",
+      "failed_at": "2026-02-01T10:58:32.594092"
+    },
+    {
+      "id": "9dfd47f3-43cb-40e6-86bb-a4041ac9d295",
+      "account_id": "17841480102452551",
+      "media_type": "image",
+      "urls": [
+        "https://barbie-arena-capitol-partially.trycloudflare.com/uploads/98a801a4-adc4-4930-95d6-19de52e4b37d.jpg?t=1769927820"
+      ],
+      "caption": "",
+      "hashtags": [],
+      "scheduled_time": "2026-02-01T17:37:00",
+      "status": "scheduled",
+      "created_at": "2026-02-01T12:07:00.960106",
+      "auto_dm_enabled": true,
+      "auto_dm_link": "https://app.manychat.com/fb4239648/dashboard",
+      "auto_dm_mode": "AUTO",
+      "auto_dm_trigger": null,
+      "auto_dm_ai_enabled": true
+    },
+    {
+      "id": "64ca4851-294d-4a5a-830f-060053e69b62",
+      "account_id": "17841480102452551",
+      "media_type": "image",
+      "urls": [
+        "https://barbie-arena-capitol-partially.trycloudflare.com/uploads/598a38cc-3d76-41d2-8f73-a33456438a86.jpg?t=1769927849"
+      ],
+      "caption": "",
+      "hashtags": [],
+      "scheduled_time": "2026-02-01T17:38:00",
+      "status": "scheduled",
+      "created_at": "2026-02-01T12:07:29.257916",
+      "auto_dm_enabled": true,
+      "auto_dm_link": "https://app.manychat.com/fb4239648/dashboard",
+      "auto_dm_mode": "AUTO",
+      "auto_dm_trigger": null,
+      "auto_dm_ai_enabled": true
+    }
+  ]
 }

@@ -3,6 +3,7 @@
 import time
 import threading
 from datetime import datetime
+from urllib.parse import urlparse, urlunparse
 from pydantic import HttpUrl
 
 from src.models.post import PostMedia, Post, PostStatus
@@ -18,9 +19,34 @@ _stop = threading.Event()
 _thread: threading.Thread | None = None
 
 
+def _rewrite_upload_url_to_current_base(url: str) -> str:
+    """If URL is our app's /uploads/ path, rewrite to use current public base.
+    Prefers BASE_URL/APP_URL (your server) so scheduling works reliably without tunnel URLs."""
+    try:
+        parsed = urlparse(url)
+        path = parsed.path or ""
+        if not path.startswith("/uploads/"):
+            return url
+        import os
+        # Prefer your server: BASE_URL or APP_URL (no request available in background)
+        base = (os.getenv("BASE_URL") or os.getenv("APP_URL") or "").strip().rstrip("/")
+        if not base:
+            from web.cloudflare_helper import get_current_public_base_url
+            base = get_current_public_base_url()
+        if not base:
+            return url
+        base = base.rstrip("/")
+        query = f"?{parsed.query}" if parsed.query else ""
+        return f"{base}{path}{query}"
+    except Exception:
+        return url
+
+
 def _build_post(raw: dict):
     """Build Post + PostMedia from stored scheduled post dict."""
-    urls = raw["urls"]
+    raw_urls = raw["urls"]
+    # Rewrite /uploads/ URLs to current public base so tunnel URL changes don't break scheduled posts
+    urls = [_rewrite_upload_url_to_current_base(u) for u in raw_urls]
     media_type = raw["media_type"]
     caption = raw.get("caption") or ""
     hashtags = raw.get("hashtags") or []

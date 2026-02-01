@@ -35,13 +35,13 @@
     "trigger_word": "sendme ",
     "ai_enabled": true
   },
-  "1405915827600672:18111798955634935": {
-    "account_id": "1405915827600672",
-    "media_id": "18111798955634935",
+  "17841444586383008:18079483820204638": {
+    "account_id": "17841444586383008",
+    "media_id": "18079483820204638",
     "file_url": "https://app.manychat.com/fb4239648/dashboard",
     "file_path": null,
     "trigger_mode": "KEYWORD",
-    "trigger_word": "sendme ",
+    "trigger_word": "e",
     "ai_enabled": true
   }
 }

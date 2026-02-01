@@ -1,7 +1,7 @@
 accounts:
-- account_id: '1405915827600672'
+- account_id: '17841444586383008'
   username: mr_tony.87
-  access_token: IGAALONzy60ghBZAFlpM0JWWno5ZAWhaaUh0dkhCWVU4cXM5Nm05R1BQWlFITHBuamd4Q0pYRXRETlotdlp0N2xCcUk4VmFWby1DSHdlbUJOeHZA2eUlvbnlfdkdJY0psbVZAqTk9OZAl9wMFM3MVI5X1MybzRra3BWSF9CYkd1ZA2hjTQZDZD
+  access_token: IGAALONzy60ghBZAGFiY0FrZADlfYWZAhZAS1XMVRaOUNYRzlvTDdJRmhmUmVBdkV2ckNCTmU5UmRhMGZAwWFk2d1lMRUIyZAEhHLUhLNU5HdkVOV2VVbWxxdE13N2c3UmdhaFRhRnA1Q3ZASU1ZAtMGJsaGVPTVRpdVZASbkxZAbjdSTUtNawZDZD
   basic_display_token: IGAATZBrEl8ZCSBBZAGJLM2JmRVp4R3g4eTV5TEtUMEJkXzB0LU0xbllWNDJ0ZAVg0d3NLTVZAyTzBCSkNsV3lPQkFwZA2gyZAzU5ZAFZASd2dDMTRXeHMxZAmpHczh4cnlrVTNfTUpqMGNjeVo4Q0haYXdvOFNIVlpBaGYwQ01sQU5KajdJMAZDZD
   password: 12345678@
   proxy:
@@ -22,12 +22,12 @@ accounts:
     link_to_send: file:///C:/Users/kanis/Downloads/2508843519.pdf
   ai_dm:
     enabled: true
-  instagram_business_id: '1405915827600672'
-- account_id: '17841457878364664'
-  username: universal__levi
-  access_token: IGAATZBrEl8ZCSBBZAGEyRmdnOW4yeVlqOWVEdWw5NkpqOVhmQUwtZAzdBZAk5TVEhtQWFvYW5QR0I4ZAUpNUnNlaEZA4eG81R19LcmpfblhqTW9ab0VCd1B2WkdCTkdkQjJpU21QaEVXNl9EU0dUakE4bERUSDVYZAVhmNHN6eHBNSnFJawZDZD
+  instagram_business_id: '1373063664121276'
+- account_id: '17841480102452551'
+  username: example_8030
+  access_token: IGAAXIeneXrCxBZAGFVSGVyeEZAsdkpkX0lUd3lHWVpKdzF5c0pIcFkzWnVBQS1vWnFCQklyckJYZAUxqM2xHUHowUkJlY29NRF85STdReXRDaGpNeTZAKS1JubUdTb1dxWG5naFVOZAVB6SW9EN3AwYnV4eHRjRm1WWng1Ynpic1lKMAZDZD
   basic_display_token: null
-  password: null
+  password: kanishk@1
   proxy:
     enabled: false
   warming:

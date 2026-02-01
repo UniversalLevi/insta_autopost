@@ -1,25 +1,370 @@
 {% extends "layout.html" %}
 
-{% block title %}Schedule{% endblock %}
-{% block page_title %}Scheduled Posts{% endblock %}
+{% block title %}Schedule Queue - InstaForge{% endblock %}
 
-{% block actions %}
-<select id="schedule-status-filter" class="form-control" style="width: auto; display: inline-block;" onchange="loadScheduled()">
-    <option value="">All (scheduled + failed)</option>
-    <option value="scheduled">Scheduled</option>
-    <option value="failed">Failed</option>
-</select>
-<button class="btn btn-secondary" onclick="loadScheduled()">
-    <span>🔄</span> Refresh
-</button>
-{% endblock %}
+{% block page_title %}Schedule Queue{% endblock %}
 
 {% block content %}
-<div id="schedule-container">
-    <div class="text-muted">Loading scheduled queue...</div>
-</div>
-{% endblock %}
+<div class="schedule-page">
+    <div class="page-header">
+        <div class="header-actions">
+            <button id="refresh-queue" class="btn btn-primary">
+                <span class="icon">🔄</span> Refresh
+            </button>
+        </div>
+    </div>
+    <p class="schedule-tip">Tip: Set <strong>BASE_URL</strong> to your server (e.g. <code>https://yourdomain.com</code>) so scheduled posts use your server and run reliably.</p>
 
-{% block scripts %}
-<script src="/static/js/schedule.js"></script>
+    <div id="schedule-loading" class="loading" style="display: none;">
+        <div class="loading-spinner"></div>
+        Loading schedule...
+    </div>
+
+    <div id="schedule-content" style="display: none;">
+        <section class="schedule-section">
+            <h3>📋 Scheduling queue</h3>
+            <p class="section-desc">Upcoming posts that will be published at their scheduled time.</p>
+            <div id="queue-list" class="queue-list"></div>
+            <div id="queue-empty" class="empty-state" style="display: none;">No scheduled posts in the queue.</div>
+        </section>
+
+        <section class="schedule-section failed-section">
+            <h3>❌ Failed</h3>
+            <p class="section-desc">Posts that failed to publish. Click "Show error" on a post to see the reason, then fix and reschedule.</p>
+            <div id="failed-list" class="failed-list"></div>
+            <div id="failed-empty" class="empty-state" style="display: none;">No failed posts.</div>
+        </section>
+    </div>
+
+    <div id="schedule-error" class="error-message" style="display: none;"></div>
+</div>
+
+<style>
+.schedule-page {
+    padding: 20px;
+}
+
+.schedule-page .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.schedule-page .header-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.schedule-tip {
+    margin: 0 0 20px 0;
+    font-size: 13px;
+    color: #6b7280;
+}
+
+.schedule-tip code {
+    background: #f3f4f6;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.schedule-section {
+    margin-bottom: 32px;
+}
+
+.schedule-section h3 {
+    margin: 0 0 8px 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #374151;
+}
+
+.schedule-section .section-desc {
+    margin: 0 0 16px 0;
+    font-size: 14px;
+    color: #6b7280;
+}
+
+.schedule-section.failed-section h3 {
+    color: #991b1b;
+}
+
+.loading {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 24px;
+    color: #6b7280;
+}
+
+.loading-spinner {
+    width: 24px;
+    height: 24px;
+    border: 2px solid #e5e7eb;
+    border-top-color: #6366f1;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.queue-list {
+    display: grid;
+    gap: 12px;
+}
+
+.queue-card {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 14px 16px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 16px;
+    align-items: center;
+}
+
+.queue-card .time {
+    font-weight: 600;
+    font-size: 14px;
+    color: #374151;
+    min-width: 160px;
+}
+
+.queue-card .meta {
+    font-size: 13px;
+    color: #6b7280;
+}
+
+.queue-card .caption-preview {
+    font-size: 13px;
+    color: #374151;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+}
+
+.failed-list {
+    display: grid;
+    gap: 16px;
+}
+
+.failed-card {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-left: 4px solid #ef4444;
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.failed-card .failed-header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 10px;
+    font-size: 13px;
+    color: #374151;
+}
+
+.failed-card .failed-time {
+    font-weight: 600;
+}
+
+.failed-card .failed-at {
+    color: #6b7280;
+    font-size: 12px;
+}
+
+.failed-card .error-reason {
+    background: white;
+    border: 1px solid #fecaca;
+    border-radius: 6px;
+    padding: 12px;
+    font-size: 13px;
+    color: #991b1b;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin-top: 8px;
+}
+
+.failed-card .show-error-btn {
+    margin-top: 10px;
+    padding: 6px 12px;
+    font-size: 13px;
+    background: white;
+    border: 1px solid #f87171;
+    color: #991b1b;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.failed-card .show-error-btn:hover {
+    background: #fef2f2;
+}
+
+.failed-card .caption-preview {
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: 6px;
+}
+
+.empty-state {
+    padding: 24px;
+    text-align: center;
+    color: #6b7280;
+    font-size: 14px;
+    background: #f9fafb;
+    border-radius: 8px;
+    border: 1px dashed #e5e7eb;
+}
+
+.error-message {
+    background: #fee2e2;
+    color: #991b1b;
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+}
+</style>
+
+<script>
+function escapeHtml(str) {
+    if (str == null) return '';
+    const s = String(str);
+    const div = document.createElement('div');
+    div.textContent = s;
+    return div.innerHTML;
+}
+
+function formatTime(iso) {
+    if (!iso) return '—';
+    try {
+        return new Date(iso).toLocaleString(undefined, {
+            dateStyle: 'short',
+            timeStyle: 'short'
+        });
+    } catch (_) {
+        return iso;
+    }
+}
+
+async function loadScheduleQueue() {
+    const loadingEl = document.getElementById('schedule-loading');
+    const contentEl = document.getElementById('schedule-content');
+    const errorEl = document.getElementById('schedule-error');
+    const queueList = document.getElementById('queue-list');
+    const queueEmpty = document.getElementById('queue-empty');
+    const failedList = document.getElementById('failed-list');
+    const failedEmpty = document.getElementById('failed-empty');
+
+    loadingEl.style.display = 'flex';
+    contentEl.style.display = 'none';
+    errorEl.style.display = 'none';
+
+    try {
+        const response = await fetch('/api/schedule/queue', { credentials: 'include' });
+        const data = await response.json().catch(() => ({}));
+
+        loadingEl.style.display = 'none';
+
+        if (!response.ok) {
+            errorEl.textContent = data.detail || response.statusText || 'Failed to load schedule queue';
+            errorEl.style.display = 'block';
+            return;
+        }
+
+        if (data.status !== 'success') {
+            errorEl.textContent = 'Failed to load schedule queue';
+            errorEl.style.display = 'block';
+            return;
+        }
+
+        const queue = data.queue || [];
+        const failed = data.failed || [];
+
+        // Queue
+        if (queue.length === 0) {
+            queueList.innerHTML = '';
+            queueEmpty.style.display = 'block';
+        } else {
+            queueEmpty.style.display = 'none';
+            queueList.innerHTML = queue.map(function (p) {
+                const caption = (p.caption || '').trim();
+                const captionHtml = caption
+                    ? '<div class="caption-preview">' + escapeHtml(caption.substring(0, 120)) + (caption.length > 120 ? '…' : '') + '</div>'
+                    : '';
+                return '<div class="queue-card">' +
+                    '<span class="time">' + escapeHtml(formatTime(p.scheduled_time)) + '</span>' +
+                    '<div class="meta">' +
+                    'Account: ' + escapeHtml(p.account_id) + ' · ' + escapeHtml(p.media_type || 'post') +
+                    captionHtml +
+                    '</div>' +
+                    '<span class="meta">' + (p.urls && p.urls.length ? p.urls.length + ' file(s)' : '—') + '</span>' +
+                    '</div>';
+            }).join('');
+        }
+
+        // Failed: show summary only; error visible when user clicks "Show error"
+        if (failed.length === 0) {
+            failedList.innerHTML = '';
+            failedEmpty.style.display = 'block';
+        } else {
+            failedEmpty.style.display = 'none';
+            failedList.innerHTML = failed.map(function (p, idx) {
+                const caption = (p.caption || '').trim();
+                const captionHtml = caption
+                    ? '<div class="caption-preview">' + escapeHtml(caption.substring(0, 100)) + (caption.length > 100 ? '…' : '') + '</div>'
+                    : '';
+                const errId = 'failed-err-' + idx;
+                const errMsg = (p.error_message || 'Unknown error');
+                return '<div class="failed-card" data-failed-index="' + idx + '">' +
+                    '<div class="failed-header">' +
+                    '<span class="failed-time">' + escapeHtml(formatTime(p.scheduled_time)) + '</span>' +
+                    '<span>Account: ' + escapeHtml(p.account_id) + '</span>' +
+                    '<span>' + escapeHtml(p.media_type || 'post') + '</span>' +
+                    '<span class="failed-at">Failed at: ' + escapeHtml(formatTime(p.failed_at)) + '</span>' +
+                    '</div>' +
+                    '<div id="' + errId + '" class="error-reason" style="display: none;">' + escapeHtml(errMsg) + '</div>' +
+                    '<button type="button" class="show-error-btn" data-target="' + errId + '" aria-expanded="false">Show error</button>' +
+                    captionHtml +
+                    '</div>';
+            }).join('');
+        }
+
+        contentEl.style.display = 'block';
+    } catch (err) {
+        loadingEl.style.display = 'none';
+        errorEl.textContent = 'Error loading schedule: ' + (err.message || 'Unknown error');
+        errorEl.style.display = 'block';
+    }
+}
+
+document.getElementById('refresh-queue').addEventListener('click', loadScheduleQueue);
+
+// One-time: click on "Show error" / "Hide error" (works for dynamically loaded failed list)
+document.getElementById('failed-list').addEventListener('click', function (ev) {
+    var btn = ev.target;
+    if (!btn || !btn.classList || !btn.classList.contains('show-error-btn')) return;
+    var targetId = btn.getAttribute('data-target');
+    var el = targetId ? document.getElementById(targetId) : null;
+    if (!el) return;
+    var expanded = btn.getAttribute('aria-expanded') === 'true';
+    if (expanded) {
+        el.style.display = 'none';
+        btn.setAttribute('aria-expanded', 'false');
+        btn.textContent = 'Show error';
+    } else {
+        el.style.display = 'block';
+        btn.setAttribute('aria-expanded', 'true');
+        btn.textContent = 'Hide error';
+    }
+});
+
+// Load on page load
+loadScheduleQueue();
+</script>
 {% endblock %}

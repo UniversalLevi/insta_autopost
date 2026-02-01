@@ -94,13 +94,27 @@ class CommentService:
             
             comments = response.get("data", [])
             
+            # Normalize: Graph API may return username only under "from"; ensure every comment has username and from
+            for c in comments:
+                if not isinstance(c, dict):
+                    continue
+                from_obj = c.get("from")
+                if not isinstance(from_obj, dict):
+                    from_obj = {}
+                # Top-level "username" is deprecated; ensure we have username from from
+                if not c.get("username") and from_obj.get("username"):
+                    c["username"] = from_obj.get("username")
+                # Ensure "from" exists for DM recipient (id + username)
+                if not c.get("from") or not isinstance(c.get("from"), dict):
+                    c["from"] = {"id": from_obj.get("id"), "username": from_obj.get("username") or c.get("username")}
+            
             if comments_count_from_media is not None and comments_count_from_media > 0 and len(comments) == 0:
                 logger.warning(
                     "API returned 0 comments but media shows comments exist",
                     account_id=account_id,
                     media_id=media_id,
                     comments_count_from_media=comments_count_from_media,
-                    note="This usually means missing 'instagram_manage_comments' permission.",
+                    note="Add instagram_manage_comments (or instagram_business_manage_comments) in Meta App permissions.",
                 )
             
             return comments

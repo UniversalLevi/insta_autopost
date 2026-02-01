@@ -339,16 +339,24 @@ class CommentMonitor:
         if account_id in self.stop_events:
             self.stop_events[account_id].set()
         
-        # Wait for thread to finish (but don't block too long)
+        # Wait for thread to finish (but don't block too long). Daemon threads will exit with process.
         if account_id in self.monitor_threads:
             thread = self.monitor_threads[account_id]
-            thread.join(timeout=2)
-            if thread.is_alive():
+            try:
+                thread.join(timeout=2)
+                if thread.is_alive():
+                    logger.warning(
+                        "Comment monitor thread still alive after timeout, continuing shutdown",
+                        account_id=account_id,
+                    )
+            except Exception as e:
                 logger.warning(
-                    "Comment monitor thread still alive after timeout, continuing shutdown",
+                    "Comment monitor stop wait interrupted, continuing shutdown",
                     account_id=account_id,
+                    error=str(e),
                 )
-            del self.monitor_threads[account_id]
+            finally:
+                self.monitor_threads.pop(account_id, None)
         
         logger.info("Stopped comment monitoring", account_id=account_id)
     

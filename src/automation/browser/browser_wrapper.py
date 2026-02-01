@@ -70,5 +70,14 @@ class BrowserWrapper:
     
     def close_all(self):
         """Close all browsers"""
-        loop = self._get_event_loop()
-        loop.run_until_complete(self.browser_service.close_all())
+        try:
+            loop = self._get_event_loop()
+            if loop.is_running():
+                # If loop is running, schedule close_all as a task
+                import asyncio
+                asyncio.create_task(self.browser_service.close_all())
+            else:
+                loop.run_until_complete(self.browser_service.close_all())
+        except RuntimeError:
+            # Event loop might be closed during shutdown
+            pass

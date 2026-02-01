@@ -6,39 +6,6 @@
 
 {% block content %}
 <div class="accounts-status-page">
-    <!-- 1. Generate access tokens (add Instagram account via OAuth, same as first image) -->
-    <section class="generate-tokens-section">
-        <div class="section-header collapsible" id="generate-tokens-header">
-            <span class="section-icon">🔑</span>
-            <div class="section-title-block">
-                <h2 class="section-title">1. Generate access tokens</h2>
-                <p class="section-desc">Add an Instagram account to generate access tokens and setup webhook subscriptions.</p>
-            </div>
-            <span class="collapse-icon" aria-hidden="true">^</span>
-        </div>
-        <div class="section-body" id="generate-tokens-body">
-            <div class="added-accounts-table-wrap">
-                <table class="added-accounts-table">
-                    <thead>
-                        <tr>
-                            <th>Instagram account</th>
-                            <th>Token</th>
-                            <th>Webhook Subscription</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody id="added-accounts-tbody">
-                        <tr><td colspan="4" class="loading-cell">Loading...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-            <div class="add-account-row">
-                <a href="/auth/meta/login" class="btn btn-secondary add-account-btn" target="_blank" rel="noopener">Add account</a>
-            </div>
-            <p class="add-account-hint">Click “Add account” to open Instagram/Meta login. After you log in with your credentials, your account will appear above with options to generate token and manage webhook.</p>
-        </div>
-    </section>
-
     <div class="page-header">
         <div class="header-actions">
             <button id="refresh-status" class="btn btn-primary">
@@ -47,219 +14,24 @@
             <button id="reload-accounts" class="btn btn-secondary">
                 <span class="icon">♻️</span> Reload Accounts
             </button>
+            <button id="run-warming" class="btn btn-secondary" title="Run warming actions now for all accounts with warming enabled">
+                <span class="icon">🔥</span> Run Warming Now
+            </button>
         </div>
     </div>
 
+    <div id="warming-status" class="warming-status-card" style="display: none;"></div>
+
+    <div id="health-summary" class="health-summary" style="display: none;"></div>
+
     <div id="accounts-list" class="accounts-list">
-        <div class="loading">Loading account status...</div>
+        <div class="loading"><div class="loading-spinner"></div>Loading account status...</div>
     </div>
 </div>
 
 <style>
 .accounts-status-page {
     padding: 20px;
-}
-
-.generate-tokens-section {
-    background: white;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    margin-bottom: 24px;
-    overflow: hidden;
-}
-
-.generate-tokens-section .section-header {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 16px 20px;
-    cursor: pointer;
-    border-bottom: 1px solid #eee;
-}
-
-.generate-tokens-section .section-icon {
-    font-size: 1.25rem;
-    color: #1877f2;
-}
-
-.generate-tokens-section .section-title-block {
-    flex: 1;
-}
-
-.generate-tokens-section .section-title {
-    margin: 0 0 4px 0;
-    font-size: 1.125rem;
-    font-weight: 600;
-}
-
-.generate-tokens-section .section-desc {
-    margin: 0;
-    font-size: 0.875rem;
-    color: #65676b;
-}
-
-.generate-tokens-section .collapse-icon {
-    color: #65676b;
-    font-size: 0.875rem;
-}
-
-.generate-tokens-section .section-body {
-    padding: 16px 20px;
-}
-
-.added-accounts-table-wrap {
-    overflow-x: auto;
-    margin-bottom: 16px;
-}
-
-.added-accounts-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.9375rem;
-}
-
-.added-accounts-table th {
-    text-align: left;
-    padding: 12px 16px;
-    border-bottom: 1px solid #e4e6eb;
-    color: #65676b;
-    font-weight: 600;
-}
-
-.added-accounts-table td {
-    padding: 12px 16px;
-    border-bottom: 1px solid #e4e6eb;
-    vertical-align: middle;
-}
-
-.added-accounts-table .loading-cell {
-    color: #65676b;
-    text-align: center;
-}
-
-.ig-account-cell {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.ig-account-avatar {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    background: #e4e6eb;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.25rem;
-    flex-shrink: 0;
-}
-
-.ig-account-info .ig-username {
-    font-weight: 600;
-    color: #050505;
-}
-
-.ig-account-info .ig-id {
-    font-size: 0.8125rem;
-    color: #1877f2;
-}
-
-.ig-account-info .ig-id a {
-    color: #1877f2;
-    text-decoration: none;
-}
-
-.ig-account-info .ig-id a:hover {
-    text-decoration: underline;
-}
-
-.webhook-toggle-wrap {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.webhook-toggle {
-    width: 44px;
-    height: 24px;
-    border-radius: 12px;
-    background: #1877f2;
-    border: none;
-    cursor: pointer;
-    position: relative;
-    transition: background 0.2s;
-}
-
-.webhook-toggle.off {
-    background: #ccc;
-}
-
-.webhook-toggle::after {
-    content: '';
-    position: absolute;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: white;
-    top: 2px;
-    left: 2px;
-    transition: transform 0.2s;
-}
-
-.webhook-toggle.off::after {
-    transform: translateX(0);
-}
-
-.webhook-toggle:not(.off)::after {
-    transform: translateX(20px);
-}
-
-.delete-account-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 4px;
-    color: #65676b;
-    font-size: 1rem;
-}
-
-.delete-account-btn:hover {
-    color: #ef4444;
-}
-
-.add-account-row {
-    margin-top: 8px;
-}
-
-.add-account-btn {
-    display: inline-block;
-    padding: 8px 16px;
-    border-radius: 6px;
-    background: #e4e6eb;
-    color: #050505;
-    text-decoration: none;
-    font-weight: 500;
-    font-size: 0.9375rem;
-}
-
-.add-account-btn:hover {
-    background: #d8dadf;
-}
-
-.add-account-hint {
-    margin: 12px 0 0 0;
-    font-size: 0.8125rem;
-    color: #65676b;
-}
-
-.generate-token-link {
-    color: #1877f2;
-    text-decoration: none;
-}
-
-.generate-token-link:hover {
-    text-decoration: underline;
 }
 
 .page-header {
@@ -397,6 +169,23 @@
     text-align: center;
     padding: 40px;
     color: #6b7280;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.loading-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid #e5e7eb;
+    border-top-color: #6366f1;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
 }
 
 .error-message {
@@ -414,37 +203,184 @@
     border-radius: 6px;
     margin-bottom: 20px;
 }
+
+.warming-status-card {
+    background: white;
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    border-left: 4px solid #f59e0b;
+}
+
+.warming-status-card h4 {
+    margin: 0 0 8px 0;
+    font-size: 14px;
+    color: #374151;
+}
+
+.warming-status-card .schedule {
+    font-size: 13px;
+    color: #6b7280;
+    margin-bottom: 8px;
+}
+
+.warming-status-card .accounts-enabled {
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.health-summary {
+    margin-bottom: 20px;
+    padding: 16px 20px;
+    border-radius: 8px;
+    border-left: 4px solid #f59e0b;
+    background: #fffbeb;
+    color: #92400e;
+}
+
+.health-summary.critical {
+    border-left-color: #ef4444;
+    background: #fef2f2;
+    color: #991b1b;
+}
+
+.health-summary h4 {
+    margin: 0 0 8px 0;
+    font-size: 14px;
+}
+
+.health-summary ul {
+    margin: 0;
+    padding-left: 20px;
+    font-size: 13px;
+}
+
+.account-card .issues-block {
+    margin-bottom: 12px;
+    padding: 12px;
+    border-radius: 6px;
+    background: #fef2f2;
+    border-left: 3px solid #ef4444;
+    font-size: 13px;
+    color: #991b1b;
+}
+
+.account-card .issues-block h4 {
+    margin: 0 0 8px 0;
+    font-size: 13px;
+}
+
+.account-card .issues-block ul {
+    margin: 0;
+    padding-left: 18px;
+}
 </style>
 
 <script>
 let refreshInterval = null;
 
+const STATUS_FETCH_TIMEOUT_MS = 60000; // 60 seconds
+
+function escapeHtml(str) {
+    if (str == null) return '';
+    const s = String(str);
+    const div = document.createElement('div');
+    div.textContent = s;
+    return div.innerHTML;
+}
+
 async function loadAccountStatus() {
     const container = document.getElementById('accounts-list');
-    container.innerHTML = '<div class="loading">Loading account status...</div>';
-
+    container.innerHTML = '<div class="loading"><div class="loading-spinner"></div>Loading account status...</div>';
+    
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000);
-
+    const timeoutId = setTimeout(() => controller.abort(), STATUS_FETCH_TIMEOUT_MS);
+    
     try {
-        const response = await fetch('/api/accounts/status', { signal: controller.signal });
+        const response = await fetch('/api/accounts/status', {
+            credentials: 'include',
+            signal: controller.signal,
+        });
         clearTimeout(timeoutId);
-        const data = await response.json();
-
-        if (data.status === 'success' && data.accounts) {
+        
+        const data = await response.json().catch(() => ({}));
+        
+        if (!response.ok) {
+            const msg = (typeof data.detail === 'string' ? data.detail : data.detail?.message) || response.statusText;
+            if (response.status === 401) {
+                container.innerHTML = '<div class="error-message">Please log in to view account status. <a href="/login">Log in</a></div>';
+            } else {
+                container.innerHTML = '<div class="error-message">Failed to load account status: ' + (msg || response.status) + '</div>';
+            }
+            return;
+        }
+        
+        if (data.status === 'success' && Array.isArray(data.accounts)) {
+            renderHealthSummary(data.accounts);
             renderAccounts(data.accounts);
+            loadWarmingStatus();
         } else {
             container.innerHTML = '<div class="error-message">Failed to load account status</div>';
         }
     } catch (error) {
         clearTimeout(timeoutId);
+        console.error('Error loading account status:', error);
         if (error.name === 'AbortError') {
-            container.innerHTML = '<div class="error-message">Request timed out. Click Refresh Status to try again.</div>';
+            container.innerHTML = '<div class="error-message">Request timed out. Check your connection and try again.</div>';
         } else {
-            console.error('Error loading account status:', error);
             container.innerHTML = '<div class="error-message">Error loading account status: ' + (error.message || 'Unknown error') + '</div>';
         }
     }
+}
+
+async function loadWarmingStatus() {
+    const el = document.getElementById('warming-status');
+    if (!el) return;
+    try {
+        const response = await fetch('/api/warming/status', { credentials: 'include' });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            el.style.display = 'none';
+            return;
+        }
+        const scheduleTime = data.schedule_time || '09:00';
+        const accounts = data.accounts || [];
+        const enabled = accounts.filter(a => a.enabled);
+        el.innerHTML = '<h4>🔥 Warming</h4>' +
+            '<div class="schedule">Scheduled daily at ' + scheduleTime + '</div>' +
+            '<div class="accounts-enabled">' + (enabled.length ? enabled.map(a => a.username || a.account_id).join(', ') + ' have warming enabled' : 'No accounts with warming enabled') + '</div>';
+        el.style.display = 'block';
+    } catch (_) {
+        el.style.display = 'none';
+    }
+}
+
+function getFailedChecks(account) {
+    const checks = account.checks || {};
+    return Object.entries(checks)
+        .filter(([, c]) => (c && c.status === 'failed'))
+        .map(([name, c]) => ({ name, error: c && c.error }));
+}
+
+function renderHealthSummary(accounts) {
+    const el = document.getElementById('health-summary');
+    if (!el) return;
+    const withIssues = accounts.filter(a => {
+        const s = (a.status || '').toLowerCase();
+        return s === 'critical' || s === 'warning' || getFailedChecks(a).length > 0;
+    });
+    if (withIssues.length === 0) {
+        el.style.display = 'none';
+        el.innerHTML = '';
+        return;
+    }
+    const hasCritical = withIssues.some(a => (a.status || '').toLowerCase() === 'critical');
+    el.className = 'health-summary' + (hasCritical ? ' critical' : '');
+    el.innerHTML = '<h4>' + (hasCritical ? '⚠️ Some accounts have critical issues' : '⚠️ Some accounts have issues') + '</h4>' +
+        '<ul><li>' + withIssues.map(a => escapeHtml(a.username || a.account_id) + ' – ' + (a.status || 'issues')).join('</li><li>') + '</li></ul>' +
+        '<span style="font-size: 12px;">See each card below for details.</span>';
+    el.style.display = 'block';
 }
 
 function renderAccounts(accounts) {
@@ -456,37 +392,45 @@ function renderAccounts(accounts) {
     }
     
     container.innerHTML = accounts.map(account => {
-        const statusClass = account.status.toLowerCase();
+        const statusClass = (account.status || 'unknown').toLowerCase();
         const checks = account.checks || {};
+        const failedChecks = getFailedChecks(account);
         
         const checksHtml = Object.entries(checks).map(([name, check]) => {
             const checkStatus = check.status || 'unknown';
             const checkClass = checkStatus === 'ok' ? 'ok' : (checkStatus === 'failed' ? 'failed' : 'unknown');
-            const errorHtml = check.error ? `<div class="check-error">${check.error}</div>` : '';
-            
+            const errorHtml = check.error ? '<div class="check-error">' + escapeHtml(check.error) + '</div>' : '';
+            const label = name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
             return `
                 <div class="check-item ${checkClass}">
-                    <div class="check-name">${name.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</div>
+                    <div class="check-name">${escapeHtml(label)}</div>
                     <div class="check-status">${checkStatus === 'ok' ? '✓ OK' : (checkStatus === 'failed' ? '✗ Failed' : '? Unknown')}</div>
                     ${errorHtml}
                 </div>
             `;
         }).join('');
         
+        const issuesBlock = failedChecks.length > 0
+            ? '<div class="issues-block"><h4>Issues</h4><ul>' +
+              failedChecks.map(f => '<li><strong>' + escapeHtml(f.name.replace(/_/g, ' ')) + ':</strong> ' + escapeHtml(f.error || 'Failed') + '</li>').join('') +
+              '</ul></div>'
+            : '';
+        
         return `
             <div class="account-card ${statusClass}">
                 <div class="account-header">
                     <div class="account-info">
-                        <h3>${account.username || 'Unknown'}</h3>
-                        <div class="account-id">${account.account_id}</div>
+                        <h3>${escapeHtml(account.username || 'Unknown')}</h3>
+                        <div class="account-id">${escapeHtml(account.account_id)}</div>
                     </div>
-                    <span class="status-badge ${statusClass}">${account.status}</span>
+                    <span class="status-badge ${statusClass}">${escapeHtml(account.status || 'unknown')}</span>
                 </div>
+                ${issuesBlock}
                 <div class="checks-grid">
                     ${checksHtml}
                 </div>
                 <div style="margin-top: 12px; font-size: 12px; color: #6b7280;">
-                    Last checked: ${new Date(account.timestamp).toLocaleString()}
+                    Last checked: ${account.timestamp ? new Date(account.timestamp).toLocaleString() : '—'}
                 </div>
             </div>
         `;
@@ -497,23 +441,42 @@ document.getElementById('refresh-status').addEventListener('click', () => {
     loadAccountStatus();
 });
 
+document.getElementById('run-warming').addEventListener('click', async () => {
+    const button = document.getElementById('run-warming');
+    button.disabled = true;
+    const origHtml = button.innerHTML;
+    button.innerHTML = '<span class="icon">⏳</span> Running...';
+    try {
+        const response = await fetch('/api/warming/run', { method: 'POST', credentials: 'include' });
+        const data = await response.json().catch(() => ({}));
+        if (response.ok && data.message) {
+            alert('Warming: ' + data.message);
+        } else {
+            alert('Warming failed: ' + (data.detail || response.statusText || 'Unknown error'));
+        }
+    } catch (e) {
+        alert('Warming failed: ' + (e.message || 'Network error'));
+    } finally {
+        button.disabled = false;
+        button.innerHTML = origHtml;
+    }
+});
+
 document.getElementById('reload-accounts').addEventListener('click', async () => {
     const button = document.getElementById('reload-accounts');
     button.disabled = true;
     button.textContent = 'Reloading...';
     
     try {
-        const response = await fetch('/api/accounts/reload', { method: 'POST' });
-        const data = await response.json();
+        const response = await fetch('/api/accounts/reload', { method: 'POST', credentials: 'include' });
+        const data = await response.json().catch(() => ({}));
         
-        if (data.status === 'success') {
+        if (response.ok && data.status === 'success') {
             const container = document.getElementById('accounts-list');
             container.innerHTML = '<div class="success-message">Accounts reloaded successfully. Refreshing status...</div>';
-            setTimeout(() => {
-                loadAccountStatus();
-            }, 1000);
+            setTimeout(() => loadAccountStatus(), 1000);
         } else {
-            alert('Failed to reload accounts: ' + (data.detail || 'Unknown error'));
+            alert('Failed to reload accounts: ' + (data.detail || response.statusText || 'Unknown error'));
         }
     } catch (error) {
         console.error('Error reloading accounts:', error);
@@ -524,118 +487,8 @@ document.getElementById('reload-accounts').addEventListener('click', async () =>
     }
 });
 
-// --- Generate access tokens section: added accounts list ---
-async function loadAddedAccounts() {
-    const tbody = document.getElementById('added-accounts-tbody');
-    if (!tbody) return;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
-    try {
-        const res = await fetch('/api/added-accounts', { signal: controller.signal });
-        clearTimeout(timeoutId);
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Failed to load');
-        const accounts = data.accounts || [];
-        if (accounts.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" class="loading-cell">No Instagram accounts added yet. Click “Add account” to log in and add one.</td></tr>';
-            return;
-        }
-        tbody.innerHTML = accounts.map(acc => {
-            const webhookOn = acc.webhook_subscription !== false;
-            return `
-                <tr data-account-id="${acc.account_id}">
-                    <td>
-                        <div class="ig-account-cell">
-                            <div class="ig-account-avatar">👤</div>
-                            <div class="ig-account-info">
-                                <div class="ig-username">${escapeHtml(acc.username)}</div>
-                                <div class="ig-id"><a href="#" onclick="return false;">${escapeHtml(acc.account_id)}</a></div>
-                            </div>
-                        </div>
-                    </td>
-                    <td><a href="/auth/meta/login" target="_blank" rel="noopener" class="generate-token-link">Generate token</a></td>
-                    <td>
-                        <div class="webhook-toggle-wrap">
-                            <button type="button" class="webhook-toggle ${webhookOn ? '' : 'off'}" data-account-id="${acc.account_id}" aria-label="Webhook ${webhookOn ? 'On' : 'Off'}"> </button>
-                            <span>${webhookOn ? 'On' : 'Off'}</span>
-                        </div>
-                    </td>
-                    <td><button type="button" class="delete-account-btn" data-account-id="${acc.account_id}" title="Remove account">🗑️</button></td>
-                </tr>
-            `;
-        }).join('');
-
-        tbody.querySelectorAll('.webhook-toggle').forEach(btn => {
-            btn.addEventListener('click', () => handleWebhookToggle(btn));
-        });
-        tbody.querySelectorAll('.delete-account-btn').forEach(btn => {
-            btn.addEventListener('click', () => handleDeleteAccount(btn));
-        });
-    } catch (e) {
-        if (e.name === 'AbortError') {
-            tbody.innerHTML = '<tr><td colspan="4" class="loading-cell">Request timed out. Refresh the page to try again.</td></tr>';
-        } else {
-            console.error('Load added accounts error', e);
-            tbody.innerHTML = '<tr><td colspan="4" class="loading-cell">Error loading accounts. Try again.</td></tr>';
-        }
-    } finally {
-        clearTimeout(timeoutId);
-    }
-}
-
-function escapeHtml(s) {
-    if (s == null) return '';
-    const div = document.createElement('div');
-    div.textContent = s;
-    return div.innerHTML;
-}
-
-async function handleWebhookToggle(btn) {
-    const accountId = btn.getAttribute('data-account-id');
-    const nextState = btn.classList.contains('off');
-    try {
-        const res = await fetch(`/api/added-accounts/${accountId}/webhook`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ enabled: nextState }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Failed');
-        btn.classList.toggle('off', !nextState);
-        btn.nextElementSibling.textContent = nextState ? 'On' : 'Off';
-    } catch (e) {
-        console.error('Webhook toggle error', e);
-        alert('Failed to update webhook: ' + e.message);
-    }
-}
-
-async function handleDeleteAccount(btn) {
-    const accountId = btn.getAttribute('data-account-id');
-    if (!confirm('Remove this Instagram account from the list and from the app?')) return;
-    try {
-        const res = await fetch(`/api/added-accounts/${accountId}`, { method: 'DELETE' });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Failed');
-        loadAddedAccounts();
-        loadAccountStatus();
-    } catch (e) {
-        console.error('Delete account error', e);
-        alert('Failed to remove account: ' + e.message);
-    }
-}
-
-// Collapsible section
-const genTokensHeader = document.getElementById('generate-tokens-header');
-const genTokensBody = document.getElementById('generate-tokens-body');
-if (genTokensHeader && genTokensBody) {
-    genTokensHeader.addEventListener('click', () => {
-        genTokensBody.style.display = genTokensBody.style.display === 'none' ? '' : 'none';
-    });
-}
-
 // Load on page load
 loadAccountStatus();
-loadAddedAccounts();
 
 // Auto-refresh every 60 seconds
 refreshInterval = setInterval(loadAccountStatus, 60000);

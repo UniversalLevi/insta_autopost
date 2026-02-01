@@ -115,6 +115,13 @@ class CommentToDMService:
         
         return keyword_lower in comment_lower
     
+    def _is_public_link(self, link: Optional[str]) -> bool:
+        """Return True if link is a public HTTP/HTTPS URL that can be sent in a DM."""
+        if not link or not isinstance(link, str):
+            return False
+        s = link.strip().lower()
+        return s.startswith("http://") or s.startswith("https://")
+
     def _generate_dm_message(
         self,
         template: Optional[str],
@@ -127,13 +134,23 @@ class CommentToDMService:
         
         Args:
             template: Message template (supports {username}, {link}, {post} placeholders)
-            link: Link to include (PDF, checkout, etc.)
+            link: Link to include (PDF, checkout, etc.) – only public HTTP/HTTPS URLs are included
             comment_username: Username of commenter for personalization
             post_caption: Post caption for context
             
         Returns:
             Formatted DM message
         """
+        # file:// and non-public URLs cannot be sent in DMs; use placeholder so user knows to message for file
+        link_for_message = link
+        if link and not self._is_public_link(link):
+            link_for_message = None
+            if link.strip().lower().startswith("file://"):
+                logger.warning(
+                    "Link is file:// – cannot send in DM. Configure a public URL (e.g. cloud storage) in Settings → Comment-to-DM → Link to send.",
+                    link_preview=link[:60] + "..." if len(link) > 60 else link,
+                )
+        
         if template:
             message = template
             
@@ -142,11 +159,14 @@ class CommentToDMService:
                 message = message.replace("{username}", comment_username)
                 message = message.replace("{@username}", f"@{comment_username}")
             
-            # Replace {link} with actual link
-            if link:
-                message = message.replace("{link}", link)
+            # Replace {link} with actual link (only if public URL)
+            if link_for_message:
+                message = message.replace("{link}", link_for_message)
             elif "{link}" in message:
-                message = message.replace("{link}", "")
+                message = message.replace(
+                    "{link}",
+                    "Message us to receive the file (configure a public URL in Settings for automatic link).",
+                )
             
             # Replace {post} with post caption (truncated)
             if post_caption:
@@ -156,16 +176,16 @@ class CommentToDMService:
             return message.strip()
         
         # Default template if none provided
-        if link:
+        if link_for_message:
             if comment_username:
-                return f"Hey @{comment_username} 👋 Thanks for commenting! Here's the link you requested: {link}"
+                return f"Hey @{comment_username} 👋 Thanks for commenting! Here's the link you requested: {link_for_message}"
             else:
-                return f"Hey 👋 Thanks for commenting! Here's the link you requested: {link}"
+                return f"Hey 👋 Thanks for commenting! Here's the link you requested: {link_for_message}"
         else:
             if comment_username:
-                return f"Hey @{comment_username} 👋 Thanks for commenting!"
+                return f"Hey @{comment_username} 👋 Thanks for commenting! Message us to get the link."
             else:
-                return "Hey 👋 Thanks for commenting!"
+                return "Hey 👋 Thanks for commenting! Message us to get the link."
     
     def _check_safety_limits(self, account_id: str, config: Dict[str, Any]) -> tuple:
         """
@@ -302,7 +322,7 @@ class CommentToDMService:
         msg = (dm_message or "").strip()
         if not msg:
             link = (link_to_send or "").strip()
-            is_public_url = link.startswith("http://") or link.startswith("https://")
+            is_public_url = link and (link.startswith("http://") or link.startswith("https://"))
             # Mention user with @username so they get notified and see the link
             mention = f"@{comment_username}" if comment_username else "there"
             if is_public_url:
@@ -310,8 +330,8 @@ class CommentToDMService:
             else:
                 msg = f"Hey {mention}! 👋 Message us first (DM) so we can send you the link – Instagram restricts automated DMs."
         try:
-            # Instagram replies API expects message as query param, not JSON body
-            client._make_request("POST", f"{comment_id}/replies", params={"message": msg})
+            # Instagram Graph API: POST replies with message in request body (data)
+            client._make_request("POST", f"{comment_id}/replies", data={"message": msg})
             logger.info(
                 "Fallback reply posted (DM blocked by 24h window)",
                 account_id=account_id,
@@ -653,16 +673,24 @@ class CommentToDMService:
                 has_link=link_to_send is not None,
             )
         
-        # If no link is available, skip
+        # If no link is available, skip (or send message without link – see below)
         if not link_to_send:
             result["reason"] = "no_link_configured"
-            logger.debug(
-                "No link configured for DM",
+            logger.info(
+                "Comment-to-DM skipped: no link configured. Set link_to_send in Settings → Comment-to-DM (or per-post link) to send links via DM.",
                 account_id=account_id,
                 media_id=media_id,
                 has_post_config=post_config is not None,
             )
             return result
+        
+        # If link is file://, we still send a DM but message will not contain the raw path (handled in _generate_dm_message)
+        if link_to_send.strip().lower().startswith("file://"):
+            logger.info(
+                "Link is file:// – DM will ask user to message for file. For automatic link, use a public URL in link_to_send.",
+                account_id=account_id,
+                media_id=media_id,
+            )
         
         # Determine trigger logic (Post specific > Account global)
         trigger_keyword = "AUTO"
