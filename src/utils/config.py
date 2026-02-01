@@ -45,11 +45,29 @@ class WarmingSettings(BaseModel):
     randomize_delay_minutes: int = 30
     action_spacing_seconds: int = 60
 
+class DefaultProxy(BaseModel):
+    """Shared/default proxy used when account has proxy.enabled but no per-account host."""
+    enabled: bool = False
+    host: Optional[str] = None
+    port: Optional[int] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
+
+    def proxy_url(self) -> Optional[str]:
+        """Build proxy URL in same format as ProxyConfig (http://[user:pass@]host:port)."""
+        if not self.enabled or not self.host or not self.port:
+            return None
+        if self.username and self.password:
+            return f"http://{self.username}:{self.password}@{self.host}:{self.port}"
+        return f"http://{self.host}:{self.port}"
+
+
 class ProxySettings(BaseModel):
     connection_timeout: int = 60
     max_retries: int = 3
     verify_ssl: bool = False
     webhooks: Optional[Dict[str, Any]] = None
+    default_proxy: Optional[DefaultProxy] = None
 
 class CommentSettings(BaseModel):
     enabled: bool = False

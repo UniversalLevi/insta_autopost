@@ -16,8 +16,8 @@ logger = get_logger(__name__)
 
 class WarmingAction(ABC):
     """Base interface for warming up actions"""
-    
-    def __init__(self, client: InstagramClient):
+
+    def __init__(self, client: InstagramClient, **kwargs):
         self.client = client
     
     @abstractmethod
@@ -42,18 +42,20 @@ class LikeAction(WarmingAction):
     Falls back to simulated if browser automation is not available or fails.
     """
     
-    def __init__(self, client, browser_wrapper=None, account=None):
+    def __init__(self, client, browser_wrapper=None, account=None, proxy_url=None):
         """
         Initialize like action
-        
+
         Args:
             client: Instagram API client
             browser_wrapper: Optional browser automation wrapper
             account: Optional account model (for username/password)
+            proxy_url: Optional resolved proxy URL (per-account or shared default)
         """
         super().__init__(client)
         self.browser_wrapper = browser_wrapper
         self.account = account
+        self.proxy_url = proxy_url
     
     def execute(self, media_id: str, post_url: Optional[str] = None, **kwargs) -> Dict[str, Any]:
         """
@@ -93,13 +95,13 @@ class LikeAction(WarmingAction):
                         post_url = None
                 
                 if post_url:
-                    # Use browser automation to like
+                    # Use browser automation to like (proxy_url from ProxyManager: per-account or shared default)
                     result = self.browser_wrapper.like_post_sync(
                         account_id=self.account.account_id,
                         post_url=post_url,
                         username=self.account.username,
                         password=getattr(self.account, 'password', None),
-                        proxy_url=self.account.proxy.proxy_url if self.account.proxy.enabled else None,
+                        proxy_url=self.proxy_url,
                     )
                     
                     if result.get("status") in ["completed", "already_liked"]:
@@ -336,14 +338,15 @@ class DMAction(WarmingAction):
         return "dm"
 
 
-def create_warming_action(action_type: str, client: InstagramClient) -> WarmingAction:
+def create_warming_action(action_type: str, client: InstagramClient, **kwargs) -> WarmingAction:
     """
-    Factory function to create warming actions
-    
+    Factory function to create warming actions.
+
     Args:
         action_type: Type of action (like, comment, follow, story_view, dm)
         client: Instagram API client
-        
+        **kwargs: Passed to action constructor (e.g. browser_wrapper, account, proxy_url)
+
     Returns:
         WarmingAction instance
     """
@@ -354,9 +357,9 @@ def create_warming_action(action_type: str, client: InstagramClient) -> WarmingA
         "story_view": StoryViewAction,
         "dm": DMAction,
     }
-    
+
     action_class = action_map.get(action_type.lower())
     if not action_class:
         raise ValueError(f"Unknown warming action type: {action_type}")
-    
-    return action_class(client)
+
+    return action_class(client, **kwargs)

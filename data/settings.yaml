@@ -29,6 +29,14 @@ proxies:
   max_retries: 3
   verify_ssl: false
   webhooks: null
+  # Shared proxy for multiple accounts (e.g. 10 IG accounts). Set enabled + host + port.
+  # Optional: use ${PROXY_PASSWORD:} in password to read from env.
+  default_proxy:
+    enabled: false
+    host: null
+    port: null
+    username: null
+    password: null
 comments:
   enabled: true
   templates: []

@@ -246,7 +246,25 @@ class PostingService:
                         logger.info("Video/reels container ready", container_id=container_id)
                         break
                     elif status_code == "ERROR":
-                        error_msg = status.get("status", "Unknown error")
+                        # status field may contain error detail; API sometimes returns generic ERROR
+                        error_msg = (
+                            status.get("status")
+                            or status.get("error_message")
+                            or status.get("message")
+                        )
+                        if not error_msg or str(error_msg).strip().upper() == "ERROR":
+                            error_msg = (
+                                "Instagram could not process the video. "
+                                "Ensure the media URL is public, HTTPS, and returns the correct Content-Type. "
+                                "Try setting BASE_URL to your public domain and re-uploading."
+                            )
+                        else:
+                            error_msg = str(error_msg).strip()
+                        logger.warning(
+                            "Video/reels container ERROR",
+                            container_id=container_id,
+                            status_response=status,
+                        )
                         raise PostingError(f"Video/reels processing failed: {error_msg}")
                     logger.debug(
                         "Waiting for video/reels processing",

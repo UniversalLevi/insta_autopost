@@ -6,6 +6,39 @@
 
 {% block content %}
 <div class="accounts-status-page">
+    <!-- 1. Generate access tokens (add Instagram account via OAuth, same as first image) -->
+    <section class="generate-tokens-section">
+        <div class="section-header collapsible" id="generate-tokens-header">
+            <span class="section-icon">🔑</span>
+            <div class="section-title-block">
+                <h2 class="section-title">1. Generate access tokens</h2>
+                <p class="section-desc">Add an Instagram account to generate access tokens and setup webhook subscriptions.</p>
+            </div>
+            <span class="collapse-icon" aria-hidden="true">^</span>
+        </div>
+        <div class="section-body" id="generate-tokens-body">
+            <div class="added-accounts-table-wrap">
+                <table class="added-accounts-table">
+                    <thead>
+                        <tr>
+                            <th>Instagram account</th>
+                            <th>Token</th>
+                            <th>Webhook Subscription</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="added-accounts-tbody">
+                        <tr><td colspan="4" class="loading-cell">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="add-account-row">
+                <a href="/auth/meta/login" class="btn btn-secondary add-account-btn" target="_blank" rel="noopener">Add account</a>
+            </div>
+            <p class="add-account-hint">Click “Add account” to open Instagram/Meta login. After you log in with your credentials, your account will appear above with options to generate token and manage webhook.</p>
+        </div>
+    </section>
+
     <div class="page-header">
         <div class="header-actions">
             <button id="refresh-status" class="btn btn-primary">
@@ -25,6 +58,208 @@
 <style>
 .accounts-status-page {
     padding: 20px;
+}
+
+.generate-tokens-section {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-bottom: 24px;
+    overflow: hidden;
+}
+
+.generate-tokens-section .section-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px 20px;
+    cursor: pointer;
+    border-bottom: 1px solid #eee;
+}
+
+.generate-tokens-section .section-icon {
+    font-size: 1.25rem;
+    color: #1877f2;
+}
+
+.generate-tokens-section .section-title-block {
+    flex: 1;
+}
+
+.generate-tokens-section .section-title {
+    margin: 0 0 4px 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+}
+
+.generate-tokens-section .section-desc {
+    margin: 0;
+    font-size: 0.875rem;
+    color: #65676b;
+}
+
+.generate-tokens-section .collapse-icon {
+    color: #65676b;
+    font-size: 0.875rem;
+}
+
+.generate-tokens-section .section-body {
+    padding: 16px 20px;
+}
+
+.added-accounts-table-wrap {
+    overflow-x: auto;
+    margin-bottom: 16px;
+}
+
+.added-accounts-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9375rem;
+}
+
+.added-accounts-table th {
+    text-align: left;
+    padding: 12px 16px;
+    border-bottom: 1px solid #e4e6eb;
+    color: #65676b;
+    font-weight: 600;
+}
+
+.added-accounts-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid #e4e6eb;
+    vertical-align: middle;
+}
+
+.added-accounts-table .loading-cell {
+    color: #65676b;
+    text-align: center;
+}
+
+.ig-account-cell {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.ig-account-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #e4e6eb;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+}
+
+.ig-account-info .ig-username {
+    font-weight: 600;
+    color: #050505;
+}
+
+.ig-account-info .ig-id {
+    font-size: 0.8125rem;
+    color: #1877f2;
+}
+
+.ig-account-info .ig-id a {
+    color: #1877f2;
+    text-decoration: none;
+}
+
+.ig-account-info .ig-id a:hover {
+    text-decoration: underline;
+}
+
+.webhook-toggle-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.webhook-toggle {
+    width: 44px;
+    height: 24px;
+    border-radius: 12px;
+    background: #1877f2;
+    border: none;
+    cursor: pointer;
+    position: relative;
+    transition: background 0.2s;
+}
+
+.webhook-toggle.off {
+    background: #ccc;
+}
+
+.webhook-toggle::after {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: white;
+    top: 2px;
+    left: 2px;
+    transition: transform 0.2s;
+}
+
+.webhook-toggle.off::after {
+    transform: translateX(0);
+}
+
+.webhook-toggle:not(.off)::after {
+    transform: translateX(20px);
+}
+
+.delete-account-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    color: #65676b;
+    font-size: 1rem;
+}
+
+.delete-account-btn:hover {
+    color: #ef4444;
+}
+
+.add-account-row {
+    margin-top: 8px;
+}
+
+.add-account-btn {
+    display: inline-block;
+    padding: 8px 16px;
+    border-radius: 6px;
+    background: #e4e6eb;
+    color: #050505;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.9375rem;
+}
+
+.add-account-btn:hover {
+    background: #d8dadf;
+}
+
+.add-account-hint {
+    margin: 12px 0 0 0;
+    font-size: 0.8125rem;
+    color: #65676b;
+}
+
+.generate-token-link {
+    color: #1877f2;
+    text-decoration: none;
+}
+
+.generate-token-link:hover {
+    text-decoration: underline;
 }
 
 .page-header {
@@ -187,19 +422,28 @@ let refreshInterval = null;
 async function loadAccountStatus() {
     const container = document.getElementById('accounts-list');
     container.innerHTML = '<div class="loading">Loading account status...</div>';
-    
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
+
     try {
-        const response = await fetch('/api/accounts/status');
+        const response = await fetch('/api/accounts/status', { signal: controller.signal });
+        clearTimeout(timeoutId);
         const data = await response.json();
-        
+
         if (data.status === 'success' && data.accounts) {
             renderAccounts(data.accounts);
         } else {
             container.innerHTML = '<div class="error-message">Failed to load account status</div>';
         }
     } catch (error) {
-        console.error('Error loading account status:', error);
-        container.innerHTML = '<div class="error-message">Error loading account status: ' + error.message + '</div>';
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+            container.innerHTML = '<div class="error-message">Request timed out. Click Refresh Status to try again.</div>';
+        } else {
+            console.error('Error loading account status:', error);
+            container.innerHTML = '<div class="error-message">Error loading account status: ' + (error.message || 'Unknown error') + '</div>';
+        }
     }
 }
 
@@ -280,8 +524,118 @@ document.getElementById('reload-accounts').addEventListener('click', async () =>
     }
 });
 
+// --- Generate access tokens section: added accounts list ---
+async function loadAddedAccounts() {
+    const tbody = document.getElementById('added-accounts-tbody');
+    if (!tbody) return;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    try {
+        const res = await fetch('/api/added-accounts', { signal: controller.signal });
+        clearTimeout(timeoutId);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to load');
+        const accounts = data.accounts || [];
+        if (accounts.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="loading-cell">No Instagram accounts added yet. Click “Add account” to log in and add one.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = accounts.map(acc => {
+            const webhookOn = acc.webhook_subscription !== false;
+            return `
+                <tr data-account-id="${acc.account_id}">
+                    <td>
+                        <div class="ig-account-cell">
+                            <div class="ig-account-avatar">👤</div>
+                            <div class="ig-account-info">
+                                <div class="ig-username">${escapeHtml(acc.username)}</div>
+                                <div class="ig-id"><a href="#" onclick="return false;">${escapeHtml(acc.account_id)}</a></div>
+                            </div>
+                        </div>
+                    </td>
+                    <td><a href="/auth/meta/login" target="_blank" rel="noopener" class="generate-token-link">Generate token</a></td>
+                    <td>
+                        <div class="webhook-toggle-wrap">
+                            <button type="button" class="webhook-toggle ${webhookOn ? '' : 'off'}" data-account-id="${acc.account_id}" aria-label="Webhook ${webhookOn ? 'On' : 'Off'}"> </button>
+                            <span>${webhookOn ? 'On' : 'Off'}</span>
+                        </div>
+                    </td>
+                    <td><button type="button" class="delete-account-btn" data-account-id="${acc.account_id}" title="Remove account">🗑️</button></td>
+                </tr>
+            `;
+        }).join('');
+
+        tbody.querySelectorAll('.webhook-toggle').forEach(btn => {
+            btn.addEventListener('click', () => handleWebhookToggle(btn));
+        });
+        tbody.querySelectorAll('.delete-account-btn').forEach(btn => {
+            btn.addEventListener('click', () => handleDeleteAccount(btn));
+        });
+    } catch (e) {
+        if (e.name === 'AbortError') {
+            tbody.innerHTML = '<tr><td colspan="4" class="loading-cell">Request timed out. Refresh the page to try again.</td></tr>';
+        } else {
+            console.error('Load added accounts error', e);
+            tbody.innerHTML = '<tr><td colspan="4" class="loading-cell">Error loading accounts. Try again.</td></tr>';
+        }
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
+function escapeHtml(s) {
+    if (s == null) return '';
+    const div = document.createElement('div');
+    div.textContent = s;
+    return div.innerHTML;
+}
+
+async function handleWebhookToggle(btn) {
+    const accountId = btn.getAttribute('data-account-id');
+    const nextState = btn.classList.contains('off');
+    try {
+        const res = await fetch(`/api/added-accounts/${accountId}/webhook`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: nextState }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed');
+        btn.classList.toggle('off', !nextState);
+        btn.nextElementSibling.textContent = nextState ? 'On' : 'Off';
+    } catch (e) {
+        console.error('Webhook toggle error', e);
+        alert('Failed to update webhook: ' + e.message);
+    }
+}
+
+async function handleDeleteAccount(btn) {
+    const accountId = btn.getAttribute('data-account-id');
+    if (!confirm('Remove this Instagram account from the list and from the app?')) return;
+    try {
+        const res = await fetch(`/api/added-accounts/${accountId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed');
+        loadAddedAccounts();
+        loadAccountStatus();
+    } catch (e) {
+        console.error('Delete account error', e);
+        alert('Failed to remove account: ' + e.message);
+    }
+}
+
+// Collapsible section
+const genTokensHeader = document.getElementById('generate-tokens-header');
+const genTokensBody = document.getElementById('generate-tokens-body');
+if (genTokensHeader && genTokensBody) {
+    genTokensHeader.addEventListener('click', () => {
+        genTokensBody.style.display = genTokensBody.style.display === 'none' ? '' : 'none';
+    });
+}
+
 // Load on page load
 loadAccountStatus();
+loadAddedAccounts();
 
 // Auto-refresh every 60 seconds
 refreshInterval = setInterval(loadAccountStatus, 60000);

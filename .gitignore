@@ -49,6 +49,7 @@ Thumbs.db
 # Project specific
 config/accounts.yaml.local
 *.pyc
+data/instagram_added_accounts.db
 
 # Uploads (user-uploaded media files)
 uploads/

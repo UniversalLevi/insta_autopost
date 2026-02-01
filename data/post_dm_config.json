@@ -34,5 +34,14 @@
     "trigger_mode": "KEYWORD",
     "trigger_word": "sendme ",
     "ai_enabled": true
+  },
+  "1405915827600672:18111798955634935": {
+    "account_id": "1405915827600672",
+    "media_id": "18111798955634935",
+    "file_url": "https://app.manychat.com/fb4239648/dashboard",
+    "file_path": null,
+    "trigger_mode": "KEYWORD",
+    "trigger_word": "sendme ",
+    "ai_enabled": true
   }
 }

@@ -79,13 +79,19 @@ class InstaForgeApp:
             retry_after_seconds=rl["retry_after_seconds"],
         )
         
-        # Initialize proxy manager
+        # Initialize proxy manager (shared default proxy when account has proxy.enabled but no host)
+        default_proxy_url = None
+        if getattr(self.config.proxies, "default_proxy", None):
+            dp = self.config.proxies.default_proxy
+            if dp and getattr(dp, "proxy_url", None):
+                default_proxy_url = dp.proxy_url()
         accounts_dict = {acc.account_id: acc for acc in self.accounts}
         self.proxy_manager = ProxyManager(
             accounts=accounts_dict,
             connection_timeout=self.config.proxies.connection_timeout,
             max_retries=self.config.proxies.max_retries,
             verify_ssl=self.config.proxies.verify_ssl,
+            default_proxy_url=default_proxy_url,
         )
         
         # Initialize account service
@@ -259,13 +265,19 @@ class InstaForgeApp:
             self.account_service.update_accounts(new_accounts)
             self.accounts = new_accounts
             
-            # Update proxy manager
+            # Update proxy manager (reuse same default_proxy_url from config)
+            default_proxy_url = None
+            if getattr(self.config.proxies, "default_proxy", None):
+                dp = self.config.proxies.default_proxy
+                if dp and getattr(dp, "proxy_url", None):
+                    default_proxy_url = dp.proxy_url()
             accounts_dict = {acc.account_id: acc for acc in new_accounts}
             self.proxy_manager = ProxyManager(
                 accounts=accounts_dict,
                 connection_timeout=self.config.proxies.connection_timeout,
                 max_retries=self.config.proxies.max_retries,
                 verify_ssl=self.config.proxies.verify_ssl,
+                default_proxy_url=default_proxy_url,
             )
             
             # Re-register accounts in comment monitor

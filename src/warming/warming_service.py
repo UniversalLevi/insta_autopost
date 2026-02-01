@@ -186,11 +186,18 @@ class WarmingService:
                 remaining_actions -= 1
             
             try:
+                proxy_url = None
+                if self.account_service.proxy_manager:
+                    try:
+                        proxy_url = self.account_service.proxy_manager.get_proxy_url(account_id)
+                    except Exception:
+                        pass
                 action = create_warming_action(
                     action_type,
                     client,
                     browser_wrapper=self.browser_wrapper,
                     account=account,
+                    proxy_url=proxy_url,
                 )
                 
                 for _ in range(action_count):

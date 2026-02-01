@@ -10,7 +10,8 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, PlainTextResponse, JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi.concurrency import run_in_threadpool
+from starlette.types import ASGIApp, Receive, Scope, Send
 from jinja2 import Environment, FileSystemLoader
 
 from .api import router as api_router, auth_router
@@ -47,66 +48,90 @@ app.add_middleware(
 )
 
 
-# Authentication middleware
-class AuthMiddleware(BaseHTTPMiddleware):
-    """Middleware to redirect unauthenticated users to login"""
-    
-    # Public routes that don't require authentication
-    PUBLIC_ROUTES = {
-        "/login",
-        "/register",
-        "/auth/login",
-        "/auth/logout",
-        "/auth/register",
-        "/auth/meta/login",
-        "/auth/meta/callback",
-        "/auth/meta/redirect-uri",
-        "/webhooks/instagram",
-        "/api/health",
-    }
-    
-    # Routes that start with these prefixes are public
-    PUBLIC_PREFIXES = [
-        "/static/",
-        "/uploads/",
-    ]
-    
-    async def dispatch(self, request: Request, call_next):
-        path = request.url.path
-        
-        # Check if route is public
+# Authentication middleware (raw ASGI to avoid BaseHTTPMiddleware CancelledError on client disconnect)
+PUBLIC_ROUTES = {
+    "/login",
+    "/register",
+    "/auth/login",
+    "/auth/logout",
+    "/auth/register",
+    "/auth/meta/login",
+    "/auth/meta/callback",
+    "/auth/meta/redirect-uri",
+    "/webhooks/instagram",
+    "/api/health",
+}
+PUBLIC_PREFIXES = ["/static/", "/uploads/"]
+
+
+def _get_session_token_from_scope(scope: Scope) -> Optional[str]:
+    """Extract session_token from ASGI scope (Cookie or Authorization header)."""
+    headers = scope.get("headers") or []
+    headers_lower = {k.decode("latin-1").lower(): v for k, v in headers}
+    auth = headers_lower.get("authorization")
+    if auth:
+        auth_decoded = auth.decode("latin-1")
+        if auth_decoded.startswith("Bearer "):
+            return auth_decoded[7:].strip()
+    cookie = headers_lower.get("cookie")
+    if cookie:
+        cookie_decoded = cookie.decode("latin-1")
+        for part in cookie_decoded.split(";"):
+            part = part.strip()
+            if part.startswith("session_token="):
+                return part.split("=", 1)[1].strip()
+    return None
+
+
+class AuthMiddlewareASGI:
+    """Raw ASGI auth middleware; avoids request stream wrapping that causes CancelledError on disconnect."""
+
+    def __init__(self, app: ASGIApp):
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope.get("type") != "http":
+            await self.app(scope, receive, send)
+            return
+        path = scope.get("path") or ""
         is_public = (
-            path in self.PUBLIC_ROUTES or
-            any(path.startswith(prefix) for prefix in self.PUBLIC_PREFIXES) or
-            path.startswith("/api/") or  # API routes handle auth themselves
-            path.startswith("/auth/")  # Auth routes are public
+            path in PUBLIC_ROUTES
+            or any(path.startswith(p) for p in PUBLIC_PREFIXES)
+            or path.startswith("/api/")
+            or path.startswith("/auth/")
         )
-        
-        # For HTML pages (not API), check authentication
-        if not is_public:
-            # Check if user is authenticated
-            from web.auth_deps import get_session_token
-            from src.auth.user_auth import validate_session
-            
-            token = get_session_token(request)
-            user = validate_session(token) if token else None
-            
-            if not user:
-                # Redirect to login for HTML pages
-                if request.headers.get("accept", "").startswith("text/html"):
-                    return RedirectResponse(url="/login", status_code=302)
-                # For API requests, let the endpoint handle 401
-                return JSONResponse(
-                    status_code=401,
-                    content={"detail": "Not authenticated"}
-                )
-        
-        response = await call_next(request)
-        return response
+        if is_public:
+            await self.app(scope, receive, send)
+            return
+        from src.auth.user_auth import validate_session
+        token = _get_session_token_from_scope(scope)
+        user = await run_in_threadpool(validate_session, token) if token else None
+        if not user:
+            headers_list = list(scope.get("headers") or [])
+            accept = next((v for k, v in headers_list if k.lower() == b"accept"), b"")
+            if accept.decode("latin-1", errors="replace").strip().startswith("text/html"):
+                await send({
+                    "type": "http.response.start",
+                    "status": 302,
+                    "headers": [[b"location", b"/login"]],
+                })
+                await send({"type": "http.response.body", "body": b""})
+                return
+            await send({
+                "type": "http.response.start",
+                "status": 401,
+                "headers": [[b"content-type", b"application/json"]],
+            })
+            await send({
+                "type": "http.response.body",
+                "body": b'{"detail":"Not authenticated"}',
+            })
+            return
+        await self.app(scope, receive, send)
 
 
 # Add authentication middleware (after CORS)
-app.add_middleware(AuthMiddleware)
+app.add_middleware(AuthMiddlewareASGI)
 
 # Mount static files
 static_path = Path(__file__).parent / "static"
@@ -260,10 +285,15 @@ async def serve_upload_file(filename: str, request: Request):
 templates_path = Path(__file__).parent / "templates"
 jinja_env = Environment(loader=FileSystemLoader(templates_path))
 
-def render_template(template_name: str, context: dict):
-    """Render Jinja2 template"""
+def _render_template_sync(template_name: str, context: dict) -> str:
+    """Sync Jinja2 render (used from threadpool to avoid blocking event loop)."""
     template = jinja_env.get_template(template_name)
     return template.render(**context)
+
+
+async def render_template_async(template_name: str, context: dict) -> str:
+    """Render Jinja2 template in threadpool so the event loop is not blocked."""
+    return await run_in_threadpool(_render_template_sync, template_name, context)
 
 # Include API router
 app.include_router(api_router)
@@ -396,10 +426,10 @@ async def startup_event():
     """Initialize InstaForge app on startup"""
     global instaforge_app
     try:
-        # Only start Cloudflare tunnel in development (not in production with Apache)
+        # Only start Cloudflare tunnel in development when not already started by web_server.py
         ENVIRONMENT = os.getenv("ENVIRONMENT", "development").lower()
-        if ENVIRONMENT == "development":
-            port = int(os.getenv("PORT", "8000"))
+        if ENVIRONMENT == "development" and os.getenv("CLOUDFLARE_STARTED_BY_WEB_SERVER") != "1":
+            port = int(os.getenv("PORT", os.getenv("WEB_PORT", "8000")))
             print("Starting Cloudflare tunnel (development mode)...")
             try:
                 start_cloudflare(port=port)
@@ -409,46 +439,52 @@ async def startup_event():
         instaforge_app = InstaForgeApp()
         instaforge_app.initialize()
         
-        # Start comment monitoring for all accounts
-        print("Starting comment automation...")
-        try:
-            instaforge_app.comment_monitor.start_monitoring_all_accounts()
-            print("Comment automation started - monitoring posts for new comments")
-        except Exception as e:
-            logger.error(f"Failed to start comment monitoring: {e}", exc_info=True)
-        
         # Set app instance for API routes
         from .api import set_app_instance
         set_app_instance(instaforge_app)
         
-        # Start background loop to publish scheduled posts when due
-        try:
-            start_scheduled_publisher(instaforge_app, interval_seconds=60)
-        except Exception as e:
-            logger.error(f"Failed to start scheduled publisher: {e}", exc_info=True)
-        
-        # Daily token refresh for OAuth accounts (tokens older than 40 days)
-        try:
-            start_daily_token_refresh_job(instaforge_app, interval_seconds=86400)
-        except Exception as e:
-            logger.error(f"Failed to start token refresh job: {e}", exc_info=True)
-        
-        # Start warming scheduler
-        print("Starting warming scheduler...")
-        try:
-            start_warming_scheduler(instaforge_app)
-            print("Warming scheduler started - warming actions will run at scheduled time")
-        except Exception as e:
-            logger.error(f"Failed to start warming scheduler: {e}", exc_info=True)
-            print(f"Warning: Warming scheduler failed to start: {e}")
-        
-        # Start account health monitoring
-        if instaforge_app.account_health_service:
+        # Sleep mode: no scheduled posts, warming, comment monitor, token refresh, or health monitoring
+        _sleep = (os.getenv("SLEEP_MODE") or os.getenv("PAUSE_ALL") or "").strip().lower() in ("1", "true", "yes")
+        if _sleep:
+            print("SLEEP MODE: Background tasks disabled (scheduled posts, warming, comment monitor, health). Set SLEEP_MODE=0 to enable.")
+            logger.info("Sleep mode enabled - skipping scheduled publisher, warming, comment monitor, token refresh, health monitoring")
+        else:
+            # Start comment monitoring for all accounts
+            print("Starting comment automation...")
             try:
-                instaforge_app.account_health_service.start_monitoring()
-                print("Account health monitoring started")
+                instaforge_app.comment_monitor.start_monitoring_all_accounts()
+                print("Comment automation started - monitoring posts for new comments")
             except Exception as e:
-                logger.error(f"Failed to start account health monitoring: {e}", exc_info=True)
+                logger.error(f"Failed to start comment monitoring: {e}", exc_info=True)
+            
+            # Start background loop to publish scheduled posts when due
+            try:
+                start_scheduled_publisher(instaforge_app, interval_seconds=60)
+            except Exception as e:
+                logger.error(f"Failed to start scheduled publisher: {e}", exc_info=True)
+            
+            # Daily token refresh for OAuth accounts (tokens older than 40 days)
+            try:
+                start_daily_token_refresh_job(instaforge_app, interval_seconds=86400)
+            except Exception as e:
+                logger.error(f"Failed to start token refresh job: {e}", exc_info=True)
+            
+            # Start warming scheduler
+            print("Starting warming scheduler...")
+            try:
+                start_warming_scheduler(instaforge_app)
+                print("Warming scheduler started - warming actions will run at scheduled time")
+            except Exception as e:
+                logger.error(f"Failed to start warming scheduler: {e}", exc_info=True)
+                print(f"Warning: Warming scheduler failed to start: {e}")
+            
+            # Start account health monitoring
+            if instaforge_app.account_health_service:
+                try:
+                    instaforge_app.account_health_service.start_monitoring()
+                    print("Account health monitoring started")
+                except Exception as e:
+                    logger.error(f"Failed to start account health monitoring: {e}", exc_info=True)
         
         print("InstaForge startup completed successfully!")
     except Exception as e:
@@ -527,70 +563,70 @@ async def shutdown_event():
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     """Main posting page"""
-    content = render_template("index.html", {"request": request})
+    content = await render_template_async("index.html", {"request": request})
     return HTMLResponse(content=content)
 
 
 @app.get("/schedule", response_class=HTMLResponse)
 async def schedule_page(request: Request):
     """Scheduled posts queue page"""
-    content = render_template("schedule.html", {"request": request})
+    content = await render_template_async("schedule.html", {"request": request})
     return HTMLResponse(content=content)
 
 
 @app.get("/posts", response_class=HTMLResponse)
 async def posts_page(request: Request):
     """Published posts page"""
-    content = render_template("posts.html", {"request": request})
+    content = await render_template_async("posts.html", {"request": request})
     return HTMLResponse(content=content)
 
 
 @app.get("/logs", response_class=HTMLResponse)
 async def logs_page(request: Request):
     """Logs viewer page"""
-    content = render_template("logs.html", {"request": request})
+    content = await render_template_async("logs.html", {"request": request})
     return HTMLResponse(content=content)
 
 
 @app.get("/accounts", response_class=HTMLResponse)
 async def accounts_page(request: Request):
     """Account status dashboard page"""
-    content = render_template("accounts.html", {"request": request})
+    content = await render_template_async("accounts.html", {"request": request})
     return HTMLResponse(content=content)
 
 
 @app.get("/webhook-test", response_class=HTMLResponse)
 async def webhook_test_page(request: Request):
     """Webhook and AI DM test page"""
-    content = render_template("webhook-test.html", {"request": request})
+    content = await render_template_async("webhook-test.html", {"request": request})
     return HTMLResponse(content=content)
 
 
 @app.get("/config", response_class=HTMLResponse)
 async def config_page(request: Request):
     """Configuration page"""
-    content = render_template("config.html", {"request": request})
+    content = await render_template_async("config.html", {"request": request})
     return HTMLResponse(content=content)
 
 
 @app.get("/ai-settings", response_class=HTMLResponse)
 async def ai_settings_page(request: Request):
     """AI Settings page"""
-    content = render_template("ai-settings.html", {"request": request})
+    content = await render_template_async("ai-settings.html", {"request": request})
     return HTMLResponse(content=content)
 
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
     """Login page"""
-    content = render_template("login.html", {"request": request})
+    content = await render_template_async("login.html", {"request": request})
     return HTMLResponse(content=content)
 
 
 @app.get("/register", response_class=HTMLResponse)
 async def register_page(request: Request):
     """Register page"""
-    content = render_template("register.html", {"request": request})
+    content = await render_template_async("register.html", {"request": request})
     return HTMLResponse(content=content)
 
 
@@ -602,12 +638,12 @@ async def users_page(request: Request):
     from src.auth.user_auth import validate_session
     
     token = get_session_token(request)
-    user = validate_session(token) if token else None
+    user = await run_in_threadpool(validate_session, token) if token else None
     
     if not user or user.role != "admin":
         return RedirectResponse(url="/", status_code=302)
     
-    content = render_template("users.html", {"request": request})
+    content = await render_template_async("users.html", {"request": request})
     return HTMLResponse(content=content)
 
 

@@ -45,6 +45,13 @@ from src.services.batch_upload_service import (
     SUPPORTED_FORMATS,
 )
 from src.services.batch_campaign_store import get_campaign, get_all_campaigns
+from src.services.added_accounts_store import (
+    upsert_added_account as upsert_added_account_db,
+    list_added_accounts,
+    set_webhook_subscription as set_added_account_webhook,
+    delete_added_account,
+    sync_from_config_if_empty,
+)
 from src.utils.logger import get_logger
 from src.auth.meta_oauth import get_meta_login_url, META_APP_ID, META_APP_SECRET, META_REDIRECT_URI
 from src.auth.oauth_helper import OAuthHelper
@@ -90,17 +97,25 @@ def get_app() -> InstaForgeApp:
 
 
 def _is_own_server_url(url: str, request: Request) -> bool:
-    """Return True if the URL points to this app's own server (same host as public base URL)."""
+    """Return True if the URL points to this app's own server (same host as request or public base URL)."""
     try:
+        parsed_url = urlparse(url)
+        url_host = (parsed_url.netloc or "").lower().split(":")[0]
+        if not url_host:
+            return False
+        # Same-origin as current request (e.g. both localhost when user is on localhost)
+        parsed_request = urlparse(str(request.base_url))
+        request_host = (parsed_request.netloc or "").lower().split(":")[0]
+        if request_host and url_host == request_host:
+            return True
+        # Same as canonical app base (BASE_URL, proxy, or tunnel)
         from .cloudflare_helper import get_base_url
         app_base = get_base_url(str(request.base_url), request.headers if request else None)
         if not app_base:
             return False
-        parsed_url = urlparse(url)
         parsed_base = urlparse(app_base)
-        url_host = (parsed_url.netloc or "").lower().split(":")[0]
         base_host = (parsed_base.netloc or "").lower().split(":")[0]
-        return bool(url_host and base_host and url_host == base_host)
+        return bool(base_host and url_host == base_host)
     except Exception:
         return False
 
@@ -320,6 +335,29 @@ async def auth_meta_callback(request: Request):
             instagram_business_id=ig_account_id,
         )
 
+        # Also store in added_accounts DB (Generate access tokens list, same structure as second image)
+        try:
+            await run_in_threadpool(
+                upsert_added_account_db,
+                account_id=oauth_account.account_id,
+                username=oauth_account.username,
+                access_token=oauth_account.access_token,
+                basic_display_token=getattr(oauth_account, "basic_display_token", None),
+                password=oauth_account.password,
+                proxy=oauth_account.proxy.dict() if oauth_account.proxy else None,
+                webhook_subscription=True,
+                page_id=oauth_account.page_id,
+                user_access_token=oauth_account.user_access_token,
+                expires_at=oauth_account.expires_at,
+                instagram_business_id=oauth_account.instagram_business_id,
+            )
+            logger.info("Meta OAuth: saved to added_accounts DB", account_id=oauth_account.account_id)
+        except Exception as db_err:
+            logger.warning(
+                "Meta OAuth: failed to save to added_accounts DB (account still in accounts.yaml)",
+                error=str(db_err),
+            )
+
         # Reload accounts so new Meta account is registered everywhere (comment monitor, etc.)
         app = get_app()
         try:
@@ -342,7 +380,7 @@ async def auth_meta_callback(request: Request):
         })
         logger.info("Meta OAuth: token stored in memory", expires_in=expires_in)
 
-        return RedirectResponse(url="/", status_code=302)
+        return RedirectResponse(url="/accounts", status_code=302)
     except Exception as e:
         logger.exception("Meta OAuth callback: token exchange failed", error=str(e))
         raise HTTPException(status_code=500, detail=f"Token exchange failed: {str(e)}")
@@ -899,12 +937,115 @@ async def delete_account(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete account: {str(e)}")
 
+
+# --- Generate access tokens / Added Instagram accounts (DB-backed list) ---
+
+@router.get("/added-accounts")
+async def get_added_accounts_list(current_user: User = Depends(require_auth)):
+    """
+    List Instagram accounts added via OAuth (Generate access tokens).
+    Same structure as second image: account_id, username, access_token, basic_display_token, password, proxy, webhook_subscription.
+    """
+    try:
+        # One-time sync from accounts.yaml so existing accounts appear in the list
+        await run_in_threadpool(sync_from_config_if_empty, config_manager.load_accounts)
+        accounts = await run_in_threadpool(list_added_accounts)
+        # Return safe view (no raw tokens in response if you prefer; for UI we need username, account_id, webhook)
+        return {
+            "accounts": [
+                {
+                    "account_id": a["account_id"],
+                    "username": a["username"],
+                    "webhook_subscription": a.get("webhook_subscription", True),
+                    "has_access_token": bool(a.get("access_token")),
+                    "created_at": a.get("created_at"),
+                }
+                for a in accounts
+            ],
+            "count": len(accounts),
+        }
+    except Exception as e:
+        logger.exception("List added accounts failed", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to list added accounts: {str(e)}")
+
+
+class WebhookToggleBody(BaseModel):
+    enabled: bool
+
+
+@router.patch("/added-accounts/{account_id}/webhook")
+async def toggle_added_account_webhook(
+    account_id: str,
+    body: WebhookToggleBody,
+    current_user: User = Depends(require_auth),
+):
+    """Toggle webhook subscription for an added Instagram account."""
+    try:
+        ok = await run_in_threadpool(set_added_account_webhook, account_id, body.enabled)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Added account not found")
+        return {"status": "success", "account_id": account_id, "webhook_subscription": body.enabled}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Toggle webhook failed", account_id=account_id, error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to toggle webhook: {str(e)}")
+
+
+@router.delete("/added-accounts/{account_id}")
+async def delete_added_account_route(
+    account_id: str,
+    app: InstaForgeApp = Depends(get_app),
+    current_user: User = Depends(require_auth),
+):
+    """
+    Remove an Instagram account from the added-accounts list (DB) and from accounts.yaml
+    so it no longer appears in Generate access tokens and is not used by the app.
+    """
+    try:
+        # Remove from DB
+        ok = await run_in_threadpool(delete_added_account, account_id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Added account not found")
+        # Also remove from accounts.yaml so app stops using it
+        accounts = config_manager.load_accounts()
+        accounts = [a for a in accounts if a.account_id != account_id]
+        config_manager.save_accounts(accounts)
+        app.accounts = accounts
+        app.account_service.update_accounts(accounts)
+        return {"status": "success", "message": "Account removed", "account_id": account_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Delete added account failed", account_id=account_id, error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to delete account: {str(e)}")
+
+
 # --- Global Settings Endpoints ---
+
+@router.get("/config/upload-base")
+async def get_upload_base(request: Request, current_user: User = Depends(require_auth)):
+    """Return the base URL used for uploads (for video/reels: must be reliable, not tunnel)."""
+    try:
+        from .cloudflare_helper import get_upload_base_url
+        base_url = get_upload_base_url(str(request.base_url), request.headers if request else None)
+        unreliable = base_url and any(
+            h in (base_url or "").lower() for h in ["trycloudflare.com", "ngrok.io", "ngrok-free.app"]
+        )
+        return {
+            "upload_base_url": base_url or None,
+            "reliable_for_video": bool(base_url) and not unreliable,
+            "message": None if (base_url and not unreliable) else "Set BASE_URL in .env to your public HTTPS domain for video/reels.",
+        }
+    except Exception as e:
+        logger.warning("get_upload_base failed", error=str(e))
+        return {"upload_base_url": None, "reliable_for_video": False, "message": "Set BASE_URL in .env."}
+
 
 @router.get("/config/settings")
 async def get_settings(admin: User = Depends(require_admin)):
     """Get global settings (admin only)"""
-    settings = config_manager.load_settings()
+    settings = await run_in_threadpool(config_manager.load_settings)
     return settings.dict()
 
 @router.put("/config/settings")
@@ -977,17 +1118,38 @@ async def create_post(
             media = PostMedia(media_type=media_type, url=HttpUrl(post_data.urls[0]), caption=post_data.caption)
         
         # URL validation (always, including scheduled)
+        # For video/reels: reject tunnel, localhost, and HTTP URLs (Instagram must fetch from public HTTPS)
+        unreliable_hosts = ["trycloudflare.com", "ngrok.io", "ngrok-free.app"]
+        if media_type in ("video", "reels"):
+            for url in post_data.urls:
+                url_lower = url.lower()
+                if any(host in url_lower for host in unreliable_hosts):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            "Video/reels cannot use Cloudflare tunnel or ngrok URLs. "
+                            "Set BASE_URL to your public HTTPS domain in .env and restart the server, then upload the media again."
+                        ),
+                    )
+                # Instagram cannot access localhost or HTTP; require public HTTPS via BASE_URL
+                if "localhost" in url_lower or "127.0.0.1" in url_lower or url_lower.strip().startswith("http://"):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            "Video/reels require a public HTTPS URL so Instagram can fetch the file. "
+                            "Set BASE_URL to your public HTTPS domain in .env, restart the server, then upload the media again."
+                        ),
+                    )
         for url in post_data.urls:
-            # Same-origin (our uploads): always allow — video/reels from your server
+            # Same-origin (our uploads): allow if not a tunnel (tunnel already rejected above for video/reels)
             if _is_own_server_url(url, request):
                 continue
             # Non–same-origin: require public HTTPS
             if "localhost" in url or "127.0.0.1" in url or url.startswith("http://"):
                 raise HTTPException(status_code=400, detail="Instagram requires public HTTPS URLs.")
             
-            # Block unreliable tunnel hosts for video/reels (same-origin already allowed above)
+            # Block unreliable tunnel hosts for video/reels (non–same-origin)
             if media_type in ("video", "reels"):
-                unreliable_hosts = ["trycloudflare.com", "ngrok.io", "ngrok-free.app"]
                 if any(host in url.lower() for host in unreliable_hosts):
                     raise HTTPException(
                         status_code=400,
@@ -1185,7 +1347,7 @@ async def list_scheduled_posts(
     current_user: User = Depends(require_auth),
 ):
     """List scheduled and failed posts (queue). Optional filters: account_id, status (scheduled|failed)."""
-    posts = load_scheduled()
+    posts = await run_in_threadpool(load_scheduled)
     if account_id:
         posts = [p for p in posts if p.get("account_id") == account_id]
     if status_filter and status_filter.lower() in ("scheduled", "failed"):
@@ -1232,46 +1394,42 @@ async def delete_scheduled_post(
     return {"status": "success", "post_id": post_id, "message": "Scheduled post cancelled"}
 
 
+def _read_logs_sync(log_path: Path, lines: int, level: Optional[str]) -> dict:
+    """Sync helper to read and parse log file (run in threadpool)."""
+    if not log_path.exists():
+        return {"logs": [], "count": 0}
+    with open(log_path, "r", encoding="utf-8") as f:
+        all_lines = f.readlines()
+        recent_lines = all_lines[-lines:] if len(all_lines) > lines else all_lines
+    log_entries = []
+    for line in recent_lines:
+        try:
+            log_data = json.loads(line.strip())
+            log_level = log_data.get("level", "info").upper()
+            if level and log_level != level.upper():
+                continue
+            log_entries.append(LogEntry(
+                timestamp=log_data.get("timestamp", ""),
+                level=log_level,
+                event=log_data.get("event", "Log"),
+                message=log_data.get("message", "") or log_data.get("event", ""),
+                data={k: v for k, v in log_data.items() if k not in ["timestamp", "level", "event", "message"]},
+            ))
+        except json.JSONDecodeError:
+            continue
+    log_entries.reverse()
+    return {"logs": log_entries, "count": len(log_entries)}
+
+
 @router.get("/logs")
 async def get_logs(lines: int = 100, level: Optional[str] = None):
     """Get recent log entries"""
-    settings = config_manager.load_settings()
+    settings = await run_in_threadpool(config_manager.load_settings)
     fp = settings.logging.file_path
-    # Resolve relative to project root (web/api.py -> web -> project root)
     project_root = Path(__file__).resolve().parent.parent
     log_path = (project_root / fp) if not Path(fp).is_absolute() else Path(fp)
-
-    if not log_path.exists():
-        return {"logs": [], "count": 0}
-    
     try:
-        with open(log_path, "r", encoding="utf-8") as f:
-            all_lines = f.readlines()
-            recent_lines = all_lines[-lines:] if len(all_lines) > lines else all_lines
-        
-        log_entries = []
-        for line in recent_lines:
-            try:
-                log_data = json.loads(line.strip())
-                log_level = log_data.get("level", "info").upper()
-                
-                if level and log_level != level.upper():
-                    continue
-                
-                # Extract fields based on new structured logging format
-                # Structlog JSON format usually has: timestamp, level, event/message
-                log_entries.append(LogEntry(
-                    timestamp=log_data.get("timestamp", ""),
-                    level=log_level,
-                    event=log_data.get("event", "Log"), # Event might be missing or same as message
-                    message=log_data.get("message", "") or log_data.get("event", ""),
-                    data={k: v for k, v in log_data.items() if k not in ["timestamp", "level", "event", "message"]},
-                ))
-            except json.JSONDecodeError:
-                continue
-        
-        log_entries.reverse()
-        return {"logs": log_entries, "count": len(log_entries)}
+        return await run_in_threadpool(_read_logs_sync, log_path, lines, level)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to read logs: {str(e)}")
 
@@ -1368,12 +1526,20 @@ async def get_warming_status(
 async def upload_files(request: Request, files: List[UploadFile] = File(...)):
     """Upload media files"""
     try:
+        from .cloudflare_helper import get_upload_base_url
+        base_url = get_upload_base_url(str(request.base_url), request.headers if request else None)
+        if not base_url:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Set BASE_URL to your public HTTPS domain so Instagram can access uploads (required for video/reels). "
+                    "Add BASE_URL=https://yourdomain.com to .env and restart the server."
+                ),
+            )
         upload_dir = Path("uploads")
         upload_dir.mkdir(exist_ok=True)
         
         uploaded_urls = []
-        from .cloudflare_helper import get_base_url
-        base_url = get_base_url(str(request.base_url), request.headers if request else None)
         
         for file in files:
             if not file.content_type or not (file.content_type.startswith("image/") or file.content_type.startswith("video/")):
@@ -1415,8 +1581,16 @@ async def batch_upload(
     Accepts either multiple files OR a ZIP file.
     """
     try:
-        from .cloudflare_helper import get_base_url
-        base_url = get_base_url(str(request.base_url), request.headers if request else None)
+        from .cloudflare_helper import get_upload_base_url
+        base_url = get_upload_base_url(str(request.base_url), request.headers if request else None)
+        if not base_url:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Set BASE_URL to your public HTTPS domain so Instagram can access uploads (required for video/reels). "
+                    "Add BASE_URL=https://yourdomain.com to .env and restart the server."
+                ),
+            )
         
         # Parse start_date
         try:
@@ -2326,10 +2500,10 @@ async def get_accounts_status(app: InstaForgeApp = Depends(get_app)):
     try:
         if not app.account_health_service:
             raise HTTPException(status_code=500, detail="Health service not initialized")
-        
-        # Check health for all accounts
-        results = app.account_health_service.check_all_accounts()
-        
+
+        # Run health check in threadpool so Instagram API calls don't block the event loop
+        results = await run_in_threadpool(app.account_health_service.check_all_accounts)
+
         # Format response
         status_list = []
         for account_id, result in results.items():
