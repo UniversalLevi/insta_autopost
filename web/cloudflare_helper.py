@@ -140,8 +140,19 @@ def get_cloudflare_url() -> Optional[str]:
 
 
 def get_current_public_base_url() -> str:
-    """Return current public base URL for background use (no request). Prefers BASE_URL/APP_URL, then Cloudflare tunnel."""
-    base = os.getenv("BASE_URL") or os.getenv("APP_URL")
+    """
+    Return current public base URL for background use (no request).
+    
+    SaaS-safe behavior:
+    - In production: prefer BASE_URL/APP_URL (public HTTPS domain).
+    - In development: NEVER force a production BASE_URL – use tunnel or request URL instead.
+      This prevents a dev machine from generating URLs like https://veilforce.com/uploads/...
+      when the actual files only exist on the dev machine.
+    """
+    env = (os.getenv("ENVIRONMENT") or "development").strip().lower()
+    base = None
+    if env == "production":
+        base = os.getenv("BASE_URL") or os.getenv("APP_URL")
     if base:
         return (base or "").strip().rstrip("/")
     global _cloudflare_url
@@ -151,13 +162,22 @@ def get_current_public_base_url() -> str:
 
 
 def get_base_url(request_base_url: str = "", request_headers=None) -> str:
-    """Get base URL for serving uploads. Prefers BASE_URL, then proxy headers, then Cloudflare tunnel, then request."""
-    import os
+    """
+    Get base URL for serving uploads.
+    
+    SaaS-safe behavior:
+    - In production: use BASE_URL/APP_URL (your public HTTPS domain).
+    - In development: DO NOT force production BASE_URL – derive from proxy headers, tunnel, or request.
+      This avoids dev instances writing URLs like https://veilforce.com/uploads/... that do not exist
+      on the veilforce.com server.
+    """
+    env = (os.getenv("ENVIRONMENT") or "development").strip().lower()
 
     # 1) Production: use BASE_URL or APP_URL (your public HTTPS domain)
-    base = os.getenv("BASE_URL") or os.getenv("APP_URL")
-    if base:
-        return base.strip().rstrip("/")
+    if env == "production":
+        base = os.getenv("BASE_URL") or os.getenv("APP_URL")
+        if base:
+            return base.strip().rstrip("/")
 
     # 2) Behind a proxy (Render, Heroku, nginx): use X-Forwarded-Proto + X-Forwarded-Host
     if request_headers:

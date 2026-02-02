@@ -59,6 +59,9 @@ except ImportError:
 
 logger = get_logger(__name__)
 
+# Absolute uploads path (matches web/main.py uploads_path for consistent file serving)
+_UPLOADS_DIR = Path(__file__).resolve().parent.parent / "uploads"
+
 # In-memory store for Meta OAuth tokens (temporary)
 _meta_token_store: Dict[str, Any] = {}
 
@@ -1348,8 +1351,8 @@ async def get_warming_status(
 async def upload_files(request: Request, files: List[UploadFile] = File(...)):
     """Upload media files"""
     try:
-        upload_dir = Path("uploads")
-        upload_dir.mkdir(exist_ok=True)
+        upload_dir = _UPLOADS_DIR
+        upload_dir.mkdir(parents=True, exist_ok=True)
         
         uploaded_urls = []
         from .cloudflare_helper import get_base_url
@@ -1431,7 +1434,7 @@ async def batch_upload(
             raise HTTPException(status_code=400, detail="Provide either files OR zip_file, not both")
         
         # Prepare upload directory for campaign
-        campaign_upload_dir = Path("uploads") / "batch"
+        campaign_upload_dir = _UPLOADS_DIR / "batch"
         campaign_upload_dir.mkdir(parents=True, exist_ok=True)
         
         valid_files = []
@@ -1552,6 +1555,7 @@ async def batch_upload(
             caption=caption,
             hashtags=hashtags,
             base_url=base_url,
+            uploads_root=_UPLOADS_DIR,
         )
         
         # Update campaign with actual campaign_id from result
@@ -1646,12 +1650,8 @@ async def verify_url(url: str):
 @router.get("/test/check-file")
 async def check_file(filename: str):
     """Check if a file exists in uploads directory"""
-    from pathlib import Path
     import os
-    
-    # Get absolute path to uploads directory (works from any working directory)
-    base_dir = Path(__file__).parent.parent  # Go up from web/ to project root
-    uploads_path = base_dir / "uploads"
+    uploads_path = _UPLOADS_DIR
     file_path = uploads_path / filename
     
     try:

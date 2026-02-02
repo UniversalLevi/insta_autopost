@@ -189,6 +189,7 @@ def process_batch_upload(
     caption: str = "",
     hashtags: Optional[List[str]] = None,
     base_url: str = "",
+    uploads_root: Optional[Path] = None,
 ) -> Dict[str, Any]:
     """
     Process batch upload: create campaign and schedule posts.
@@ -279,8 +280,18 @@ def process_batch_upload(
             
             # Generate URL for the file
             # Files should be in /uploads/batch/{campaign_id}/
+            uploads_root_resolved = (uploads_root or Path("uploads")).resolve()
+            try:
+                relative_path = file_path.resolve().relative_to(uploads_root_resolved)
+            except ValueError:
+                # Fallback: extract path after "uploads" if present
+                parts = file_path.parts
+                if "uploads" in parts:
+                    idx = parts.index("uploads")
+                    relative_path = Path(*parts[idx + 1:])
+                else:
+                    relative_path = file_path.name
             # Convert Windows path separators to forward slashes
-            relative_path = file_path.relative_to(Path("uploads"))
             # Ensure URL includes /uploads/ prefix for file serving route
             file_url = f"{base_url.rstrip('/')}/uploads/{str(relative_path).replace(chr(92), '/')}?t={int(datetime.utcnow().timestamp())}"
             

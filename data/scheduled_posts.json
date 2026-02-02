@@ -272,13 +272,15 @@
       "caption": "",
       "hashtags": [],
       "scheduled_time": "2026-02-01T17:37:00",
-      "status": "scheduled",
+      "status": "failed",
       "created_at": "2026-02-01T12:07:00.960106",
       "auto_dm_enabled": true,
       "auto_dm_link": "https://app.manychat.com/fb4239648/dashboard",
       "auto_dm_mode": "AUTO",
       "auto_dm_trigger": null,
-      "auto_dm_ai_enabled": true
+      "auto_dm_ai_enabled": true,
+      "error_message": "Failed to publish post: Media URL returned status 404 instead of 200. This means Instagram's crawler cannot access the URL. Check: 1) File exists on server, 2) Apache is proxying /uploads/ correctly, 3) File permissions allow read access. URL: https://veilforce.com/uploads/98a801a4-adc4-4930-95d6-19de52e4b37d.jpg",
+      "failed_at": "2026-02-02T11:57:47.066447"
     },
     {
       "id": "64ca4851-294d-4a5a-830f-060053e69b62",
@@ -290,13 +292,15 @@
       "caption": "",
       "hashtags": [],
       "scheduled_time": "2026-02-01T17:38:00",
-      "status": "scheduled",
+      "status": "failed",
       "created_at": "2026-02-01T12:07:29.257916",
       "auto_dm_enabled": true,
       "auto_dm_link": "https://app.manychat.com/fb4239648/dashboard",
       "auto_dm_mode": "AUTO",
       "auto_dm_trigger": null,
-      "auto_dm_ai_enabled": true
+      "auto_dm_ai_enabled": true,
+      "error_message": "Failed to publish post: Media URL returned status 404 instead of 200. This means Instagram's crawler cannot access the URL. Check: 1) File exists on server, 2) Apache is proxying /uploads/ correctly, 3) File permissions allow read access. URL: https://veilforce.com/uploads/598a38cc-3d76-41d2-8f73-a33456438a86.jpg",
+      "failed_at": "2026-02-02T11:57:47.772048"
     }
   ]
 }

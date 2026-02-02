@@ -137,13 +137,14 @@ app.add_middleware(AuthMiddlewareASGI)
 static_path = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=static_path), name="static")
 
-# Uploads directory (create if it doesn't exist)
-uploads_path = Path("uploads")
+# Uploads directory: absolute path for reliable deployment (Render, Apache, etc.)
+_web_dir = Path(__file__).resolve().parent
+uploads_path = _web_dir.parent / "uploads"
 uploads_path.mkdir(exist_ok=True)
 
 # Direct file serving route for uploads (for better Instagram compatibility)
 # IMPORTANT: This route MUST be public (no auth) and serve raw bytes with correct Content-Type
-# Instagram's crawler requires clean access without cookies, auth, or redirects
+# Instagram's crawler requires: raw bytes, correct Content-Type, byte-range support for MP4
 @app.options("/uploads/{filename:path}")
 async def serve_upload_file_options(filename: str):
     """Handle CORS preflight requests for uploads"""
@@ -153,28 +154,51 @@ async def serve_upload_file_options(filename: str):
         headers={
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Allow-Headers": "Range",
             "Access-Control-Max-Age": "3600",
         }
     )
+
+
+def _parse_range_header(range_header: str | None, file_size: int) -> tuple[int, int] | None:
+    """
+    Parse Range header (bytes=start-end) and return (start, end) inclusive, or None.
+    Instagram's crawler sends Range requests for MP4 streaming.
+    """
+    if not range_header or not range_header.strip().lower().startswith("bytes="):
+        return None
+    try:
+        parts = range_header[6:].strip().split("-")
+        if len(parts) != 2:
+            return None
+        start_str, end_str = parts[0].strip(), parts[1].strip()
+        start = int(start_str) if start_str else 0
+        end = int(end_str) if end_str else file_size - 1
+        if start < 0 or end >= file_size or start > end:
+            return None
+        return (start, end)
+    except (ValueError, IndexError):
+        return None
+
 
 @app.get("/uploads/{filename:path}")
 @app.head("/uploads/{filename:path}")
 async def serve_upload_file(filename: str, request: Request):
     """
-    Serve uploaded files directly as raw bytes with proper headers for Instagram compatibility.
+    Serve uploaded files with byte-range support for Instagram MP4 compatibility.
     
     Instagram's crawler requirements:
     - MUST return raw file bytes (not HTML wrapper)
-    - MUST have correct Content-Type header (image/png, image/jpeg, video/mp4)
-    - MUST be publicly accessible (no auth, no cookies required)
-    - MUST support HEAD requests
+    - MUST have correct Content-Type (image/*, video/mp4)
+    - MUST be publicly accessible (no auth, no cookies)
+    - MUST support HEAD and Range requests (byte-range for video streaming)
     - MUST not redirect
     """
     import mimetypes
-    
+    from fastapi.responses import Response, StreamingResponse
+
     file_path = uploads_path / filename
-    
+
     # Security: prevent directory traversal
     try:
         resolved_path = file_path.resolve()
@@ -183,7 +207,7 @@ async def serve_upload_file(filename: str, request: Request):
             raise HTTPException(status_code=403, detail="Invalid file path")
     except (ValueError, OSError):
         raise HTTPException(status_code=403, detail="Invalid file path")
-    
+
     if not file_path.exists() or not file_path.is_file():
         user_agent = request.headers.get("User-Agent", "Unknown")[:100]
         logger.warning(
@@ -193,92 +217,111 @@ async def serve_upload_file(filename: str, request: Request):
             user_agent=user_agent,
         )
         raise HTTPException(status_code=404, detail=f"File not found: {filename}")
-    
-    # Get file size
+
     file_size = file_path.stat().st_size
-    
-    # Determine Content-Type from file extension (Instagram is strict about this)
+
+    # Content-Type from extension (Instagram is strict)
     ext = file_path.suffix.lower()
-    content_type = None
-    
-    if ext in [".jpg", ".jpeg"]:
-        content_type = "image/jpeg"
-    elif ext == ".png":
-        content_type = "image/png"
-    elif ext in [".mp4", ".mov"]:
-        content_type = "video/mp4"
-    elif ext == ".gif":
-        content_type = "image/gif"
-    elif ext == ".webp":
-        content_type = "image/webp"
-    else:
-        # Fallback to mimetypes detection
-        content_type, _ = mimetypes.guess_type(str(file_path))
-        if not content_type:
-            content_type = "application/octet-stream"
-    
-    # Log for debugging (always log in production for troubleshooting)
+    content_type = (
+        "image/jpeg" if ext in [".jpg", ".jpeg"] else
+        "image/png" if ext == ".png" else
+        "video/mp4" if ext in [".mp4", ".mov"] else
+        "image/gif" if ext == ".gif" else
+        "image/webp" if ext == ".webp" else
+        (mimetypes.guess_type(str(file_path))[0] or "application/octet-stream")
+    )
+
+    # Byte-range: Instagram sends Range for MP4; required for video streaming
+    range_tuple = _parse_range_header(request.headers.get("Range"), file_size)
+
+    # Base headers for Instagram compatibility
+    base_headers = {
+        "Content-Type": content_type,
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+        "Access-Control-Allow-Headers": "Range",
+        "Cache-Control": "public, max-age=31536000",
+        "Accept-Ranges": "bytes",
+    }
+
     user_agent = request.headers.get("User-Agent", "Unknown")
     logger.info(
         "Serving uploaded file",
         filename=filename,
         content_type=content_type,
         file_size=file_size,
-        user_agent=user_agent[:100],  # Truncate long user agents
+        has_range=range_tuple is not None,
+        user_agent=user_agent[:100],
         method=request.method,
     )
-    
-    # Build headers that Instagram requires
-    # CRITICAL: No cookies, no auth, no redirects
-    headers = {
-        "Content-Type": content_type,
-        "Content-Length": str(file_size),
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-        "Access-Control-Allow-Headers": "*",
-        "Cache-Control": "public, max-age=31536000",  # 1 year cache
-        "Accept-Ranges": "bytes",
-        # Explicitly don't set Set-Cookie header
-        # Instagram's crawler doesn't send cookies and shouldn't receive them
-    }
-    
-    # For HEAD requests, return headers only (no body)
+
+    # HEAD: return headers only
     if request.method == "HEAD":
-        from fastapi.responses import Response
-        response = Response(
-            status_code=200,
-            headers=headers
+        if range_tuple:
+            start, end = range_tuple
+            length = end - start + 1
+            resp = Response(status_code=206, headers={
+                **base_headers,
+                "Content-Length": str(length),
+                "Content-Range": f"bytes {start}-{end}/{file_size}",
+            })
+        else:
+            resp = Response(status_code=200, headers={
+                **base_headers,
+                "Content-Length": str(file_size),
+            })
+        resp.delete_cookie = lambda *a, **kw: None
+        return resp
+
+    # GET: full or partial content
+    if range_tuple:
+        start, end = range_tuple
+        length = end - start + 1
+
+        def iter_range():
+            with open(file_path, "rb") as f:
+                f.seek(start)
+                remaining = length
+                chunk_size = 8192
+                while remaining > 0:
+                    to_read = min(chunk_size, remaining)
+                    chunk = f.read(to_read)
+                    if not chunk:
+                        break
+                    remaining -= len(chunk)
+                    yield chunk
+
+        response = StreamingResponse(
+            iter_range(),
+            media_type=content_type,
+            status_code=206,
+            headers={
+                **base_headers,
+                "Content-Length": str(length),
+                "Content-Range": f"bytes {start}-{end}/{file_size}",
+            },
         )
-        # Explicitly prevent cookie setting
-        response.delete_cookie = lambda *args, **kwargs: None
-        return response
-    
-    # For GET requests, return raw file bytes
-    # Using StreamingResponse with explicit file reading to ensure raw bytes
-    from fastapi.responses import StreamingResponse
-    
-    def iterfile():
-        with open(file_path, "rb") as f:
-            # Read in chunks to avoid memory issues with large files
-            while True:
-                chunk = f.read(8192)  # 8KB chunks
-                if not chunk:
-                    break
-                yield chunk
-    
-    response = StreamingResponse(
-        iterfile(),
-        media_type=content_type,
-        headers=headers
-    )
-    # Explicitly prevent cookie setting
-    response.delete_cookie = lambda *args, **kwargs: None
-    
-    # CRITICAL: Ensure no Set-Cookie header is sent (Instagram's bot doesn't send cookies)
-    # Also ensure we're not redirecting
-    if hasattr(response, 'headers') and "Set-Cookie" in response.headers:
+    else:
+        def iterfile():
+            with open(file_path, "rb") as f:
+                while True:
+                    chunk = f.read(8192)
+                    if not chunk:
+                        break
+                    yield chunk
+
+        response = StreamingResponse(
+            iterfile(),
+            media_type=content_type,
+            headers={
+                **base_headers,
+                "Content-Length": str(file_size),
+            },
+        )
+
+    response.delete_cookie = lambda *a, **kw: None
+    if hasattr(response, "headers") and "Set-Cookie" in response.headers:
         del response.headers["Set-Cookie"]
-    
     return response
 
 # Templates
