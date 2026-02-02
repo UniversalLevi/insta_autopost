@@ -51,6 +51,7 @@ from src.services.user_store import user_store
 from src.models.user import User
 from web.auth_deps import get_current_user, require_admin, require_auth
 from fastapi.responses import Response
+from src_v2.core.config import is_v2_enabled
 
 try:
     from .cloudflare_helper import get_cloudflare_url
@@ -109,6 +110,25 @@ async def health_check():
         "status": "healthy",
         "service": "instaforge",
         "timestamp": datetime.utcnow().isoformat()
+    }
+
+
+@router.get("/version")
+async def version_check():
+    """
+    Lightweight mode/version probe for orchestration and monitoring.
+
+    - When USE_V2 is unset or false: reports legacy v1 mode.
+    - When USE_V2 is true (case-insensitive): reports v2 safe mode.
+    """
+    if is_v2_enabled():
+        return {
+            "mode": "safe",
+            "version": "v2",
+        }
+    return {
+        "mode": "legacy",
+        "version": "v1",
     }
 
 

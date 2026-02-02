@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>InstaForge V2 – Register</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #020617;
+        color: #e5e7eb;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        margin: 0;
+      }
+      .card {
+        background: #020617;
+        padding: 2.5rem 2.75rem;
+        border-radius: 1rem;
+        border: 1px solid #1f2937;
+        box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.9);
+        width: 100%;
+        max-width: 400px;
+      }
+      h1 {
+        margin-top: 0;
+        margin-bottom: 0.5rem;
+        font-size: 1.5rem;
+      }
+      p {
+        margin-top: 0;
+        margin-bottom: 1.75rem;
+        color: #9ca3af;
+        font-size: 0.9rem;
+      }
+      label {
+        display: block;
+        font-size: 0.85rem;
+        margin-bottom: 0.35rem;
+        color: #e5e7eb;
+      }
+      input[type="email"],
+      input[type="password"] {
+        width: 100%;
+        padding: 0.65rem 0.75rem;
+        border-radius: 0.5rem;
+        border: 1px solid #1f2937;
+        background: #020617;
+        color: #e5e7eb;
+        font-size: 0.9rem;
+        box-sizing: border-box;
+      }
+      input:focus {
+        outline: none;
+        border-color: #22c55e;
+        box-shadow: 0 0 0 1px #22c55e;
+      }
+      .field {
+        margin-bottom: 1.1rem;
+      }
+      button {
+        width: 100%;
+        padding: 0.7rem 0.8rem;
+        border-radius: 0.5rem;
+        border: none;
+        background: linear-gradient(135deg, #22c55e, #16a34a);
+        color: white;
+        font-weight: 600;
+        font-size: 0.95rem;
+        cursor: pointer;
+      }
+      button:hover {
+        filter: brightness(1.05);
+      }
+      .footnote {
+        margin-top: 1rem;
+        font-size: 0.8rem;
+        color: #6b7280;
+        text-align: center;
+      }
+      .footnote a {
+        color: #38bdf8;
+        text-decoration: none;
+      }
+      .error {
+        color: #f97373;
+        margin-bottom: 0.75rem;
+        font-size: 0.85rem;
+      }
+      .success {
+        color: #4ade80;
+        margin-bottom: 0.75rem;
+        font-size: 0.85rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Create V2 Account</h1>
+      <p>Register a new InstaForge V2 user.</p>
+
+      <div id="message"></div>
+
+      <form id="register-form">
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" required autocomplete="email" />
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            required
+            minlength="8"
+            autocomplete="new-password"
+          />
+        </div>
+        <button type="submit">Create account</button>
+      </form>
+
+      <div class="footnote">
+        Already have an account?
+        <a href="/v2/login">Sign in</a>
+      </div>
+    </div>
+
+    <script>
+      const form = document.getElementById("register-form");
+      const messageBox = document.getElementById("message");
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        messageBox.textContent = "";
+        messageBox.className = "";
+
+        const formData = new FormData(form);
+
+        try {
+          const res = await fetch("/v2/auth/register", {
+            method: "POST",
+            body: formData,
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.detail || "Registration failed");
+          }
+          messageBox.className = "success";
+          messageBox.textContent = "Account created and logged in.";
+          // In a real dashboard, redirect to the main app here.
+        } catch (err) {
+          messageBox.className = "error";
+          messageBox.textContent = err.message || "Registration failed";
+        }
+      });
+    </script>
+  </body>
+  </html>
+

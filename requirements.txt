@@ -17,3 +17,4 @@ itsdangerous>=2.1.2
 cloudinary>=1.36.0
 openai>=1.0.0
 bcrypt>=4.0.0
+cryptography>=42.0.0

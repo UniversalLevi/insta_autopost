@@ -13,11 +13,27 @@ try:
 except ImportError:
     pass
 
+try:
+    # Import kept minimal and side-effect free; safe even if V2 is not used.
+    from src_v2.core.config import is_v2_enabled
+except ImportError:
+    # If V2 helpers are missing for any reason, silently fall back to legacy.
+    def is_v2_enabled() -> bool:  # type: ignore[override]
+        return False
+
+
 if __name__ == "__main__":
     """
     Entry point for InstaForge.
     Starts the web dashboard and background services.
     """
+    # Optional Safe Mode short-circuit to V2 entrypoint
+    if is_v2_enabled():
+        import main_v2  # noqa: F401
+        # main_v2 has its own __main__; importing is enough to trigger when run as a module,
+        # but we explicitly exit here to avoid running legacy server startup.
+        raise SystemExit(0)
+
     # Ensure the current directory is in sys.path so imports work correctly
     root_dir = os.path.dirname(os.path.abspath(__file__))
     sys.path.insert(0, root_dir)
