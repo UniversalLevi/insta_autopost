@@ -251,7 +251,7 @@ async def auth_meta_callback(request: Request):
         logger.error("Meta OAuth callback: META_APP_ID or META_APP_SECRET not set")
         raise HTTPException(status_code=500, detail="OAuth not configured (missing app credentials)")
 
-    redirect_uri = str(request.url).split("?")[0]
+    redirect_uri = _resolve_redirect_uri()
     helper = OAuthHelper(
         app_id=META_APP_ID,
         app_secret=META_APP_SECRET,
@@ -1462,7 +1462,22 @@ async def run_warmup_automation_now(
     def _run():
         return automation.run_for_account(account_id)
 
-    result = await run_in_threadpool(_run)
+    try:
+        result = await run_in_threadpool(_run)
+    except Exception as e:
+        result = {
+            "account_id": account_id,
+            "actions": 0,
+            "errors": 0,
+            "tasks_done": [],
+            "message": f"Automation error: {e!s}",
+        }
+    # Guarantee a message when 0 actions so the UI always shows a reason
+    if result.get("actions", 0) == 0 and not (result.get("message") or "").strip():
+        result["message"] = (
+            "No actions run. Possible causes: no browser, automation disabled, "
+            "no active plan, no posts found, or all tasks already done. Check server logs for details."
+        )
     return {"status": "success", "result": result}
 
 

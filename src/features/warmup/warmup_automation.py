@@ -29,20 +29,32 @@ class WarmupAutomation:
         self.engine = WarmupEngine()
 
     def run_for_account(self, account_id: str) -> Dict[str, Any]:
-        """Run one automation cycle for an account. Returns summary."""
-        result = {"account_id": account_id, "actions": 0, "errors": 0, "tasks_done": []}
+        """Run one automation cycle for an account. Returns summary with optional message."""
+        result = {"account_id": account_id, "actions": 0, "errors": 0, "tasks_done": [], "message": None}
+        try:
+            return self._run_for_account_impl(account_id, result)
+        except Exception as e:
+            logger.exception("Warmup automation failed", account_id=account_id, error=str(e))
+            result["message"] = f"Error: {e!s}"
+            return result
+
+    def _run_for_account_impl(self, account_id: str, result: Dict[str, Any]) -> Dict[str, Any]:
         plan = get_warmup_plan(account_id)
         if not plan or plan.get("status") != "active":
+            result["message"] = "No active warm-up plan. Start warm-up first."
             return result
         cfg = get_config(account_id)
         if not cfg.get("automation_enabled"):
+            result["message"] = "Automation is disabled. Enable it in Warm-up automation settings."
             return result
         if not self.browser_wrapper:
             logger.warning("Warmup automation skipped: no browser", account_id=account_id)
+            result["message"] = "Browser automation is not available. Start the app with browser enabled."
             return result
         try:
             account = self.account_service.get_account(account_id)
         except Exception:
+            result["message"] = "Account not found."
             return result
         username = account.username or ""
         password = getattr(account, "password", None) or ""
@@ -53,6 +65,7 @@ class WarmupAutomation:
         tasks = WARMUP_DAY_PLANS.get(day, [])
         today = self.engine.get_today_plan(account_id)
         if not today:
+            result["message"] = "Could not load today's plan."
             return result
         completed_map = {t["id"]: t.get("done_count", 0) for t in today.get("tasks", [])}
         hashtags = cfg.get("target_hashtags") or ["explore"]
@@ -64,7 +77,10 @@ class WarmupAutomation:
             )
         except Exception as e:
             logger.warning("Warmup discovery failed", account_id=account_id, error=str(e))
+            result["message"] = f"Discovery failed: {e}. Check login and hashtags."
+            return result
         if not post_urls:
+            result["message"] = "No posts found for target hashtags. Try different hashtags or try again later."
             return result
         random.shuffle(post_urls)
         for task_def in tasks:
@@ -110,4 +126,8 @@ class WarmupAutomation:
                     result["errors"] += 1
         if result["actions"] > 0:
             logger.info("Warmup automation ran", account_id=account_id, actions=result["actions"])
+        elif result["actions"] == 0 and result["errors"] == 0:
+            result["message"] = "Today's automatable tasks are already done (like/comment/save). Complete manual tasks or run again tomorrow."
+        elif result["actions"] == 0 and result["errors"] > 0:
+            result["message"] = f"Ran but all {result['errors']} action(s) failed. Check login and Instagram limits."
         return result

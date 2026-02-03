@@ -46,8 +46,9 @@ def get_config(account_id: str) -> Dict[str, Any]:
     """Get automation config for account. Returns defaults if not set."""
     configs = load_config()
     cfg = configs.get(account_id, {})
+    # Default automation_enabled to True so "Run automation now" works without extra setup
     return {
-        "automation_enabled": cfg.get("automation_enabled", False),
+        "automation_enabled": cfg.get("automation_enabled", True),
         "target_hashtags": cfg.get("target_hashtags") or DEFAULT_HASHTAGS.copy(),
         "schedule_times": cfg.get("schedule_times") or DEFAULT_SCHEDULE.copy(),
     }
