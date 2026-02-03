@@ -306,8 +306,8 @@ def _process_incoming_dm_for_ai_reply(account_id: str, value: Dict[str, Any], ap
     except Exception as e:
         logger.warning("DM inbox store failed", error=str(e), account_id=account_id, user_id=user_id)
 
-    # Check if AI DM is enabled
-    ai_dm_enabled = False
+    # Check if AI DM is enabled (default: enabled when no config, so incoming DMs get auto-replies)
+    ai_dm_enabled = True
     auto_send = True
     if hasattr(account, "ai_dm") and account.ai_dm:
         ai_dm_enabled = account.ai_dm.enabled
