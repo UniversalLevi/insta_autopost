@@ -15,7 +15,7 @@
     </div>
     <p class="schedule-tip">Tip: Set <strong>BASE_URL</strong> to your server (e.g. <code>https://yourdomain.com</code>) so scheduled posts use your server and run reliably.</p>
 
-    <div id="schedule-loading" class="loading" style="display: none;">
+    <div id="schedule-loading" class="loading" style="display: flex;">
         <div class="loading-spinner"></div>
         Loading schedule...
     </div>
@@ -30,7 +30,7 @@
 
         <section class="schedule-section failed-section">
             <h3>❌ Failed</h3>
-            <p class="section-desc">Posts that failed to publish. Click "Show error" on a post to see the reason, then fix and reschedule.</p>
+            <p class="section-desc">Posts that failed to publish. Error reason is shown below each post. Fix the issue, then Retry or Cancel.</p>
             <div id="failed-list" class="failed-list"></div>
             <div id="failed-empty" class="empty-state" style="display: none;">No failed posts.</div>
         </section>
@@ -121,7 +121,7 @@
     border-radius: 8px;
     padding: 14px 16px;
     display: grid;
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: auto 1fr auto auto;
     gap: 16px;
     align-items: center;
 }
@@ -191,18 +191,37 @@
     margin-top: 8px;
 }
 
-.failed-card .show-error-btn {
+.queue-card .queue-actions,
+.failed-card .failed-actions {
     margin-top: 10px;
+    display: flex;
+    gap: 8px;
+}
+
+.btn-retry, .btn-cancel {
     padding: 6px 12px;
     font-size: 13px;
-    background: white;
-    border: 1px solid #f87171;
-    color: #991b1b;
     border-radius: 6px;
     cursor: pointer;
 }
 
-.failed-card .show-error-btn:hover {
+.btn-retry {
+    background: #dbeafe;
+    border: 1px solid #93c5fd;
+    color: #1e40af;
+}
+
+.btn-retry:hover {
+    background: #bfdbfe;
+}
+
+.btn-cancel {
+    background: white;
+    border: 1px solid #f87171;
+    color: #991b1b;
+}
+
+.btn-cancel:hover {
     background: #fef2f2;
 }
 
@@ -297,18 +316,20 @@ async function loadScheduleQueue() {
                 const captionHtml = caption
                     ? '<div class="caption-preview">' + escapeHtml(caption.substring(0, 120)) + (caption.length > 120 ? '…' : '') + '</div>'
                     : '';
-                return '<div class="queue-card">' +
+                const pid = (p.id || '').replace(/"/g, '&quot;');
+                return '<div class="queue-card" data-post-id="' + pid + '">' +
                     '<span class="time">' + escapeHtml(formatTime(p.scheduled_time)) + '</span>' +
                     '<div class="meta">' +
                     'Account: ' + escapeHtml(p.account_id) + ' · ' + escapeHtml(p.media_type || 'post') +
                     captionHtml +
                     '</div>' +
                     '<span class="meta">' + (p.urls && p.urls.length ? p.urls.length + ' file(s)' : '—') + '</span>' +
+                    '<div class="queue-actions"><button type="button" class="btn-cancel" data-id="' + pid + '">Cancel</button></div>' +
                     '</div>';
             }).join('');
         }
 
-        // Failed: show summary only; error visible when user clicks "Show error"
+        // Failed: show error reason by default so user sees why it failed
         if (failed.length === 0) {
             failedList.innerHTML = '';
             failedEmpty.style.display = 'block';
@@ -319,17 +340,20 @@ async function loadScheduleQueue() {
                 const captionHtml = caption
                     ? '<div class="caption-preview">' + escapeHtml(caption.substring(0, 100)) + (caption.length > 100 ? '…' : '') + '</div>'
                     : '';
-                const errId = 'failed-err-' + idx;
                 const errMsg = (p.error_message || 'Unknown error');
-                return '<div class="failed-card" data-failed-index="' + idx + '">' +
+                const pid = (p.id || '').replace(/"/g, '&quot;');
+                return '<div class="failed-card" data-post-id="' + pid + '">' +
                     '<div class="failed-header">' +
                     '<span class="failed-time">' + escapeHtml(formatTime(p.scheduled_time)) + '</span>' +
                     '<span>Account: ' + escapeHtml(p.account_id) + '</span>' +
                     '<span>' + escapeHtml(p.media_type || 'post') + '</span>' +
                     '<span class="failed-at">Failed at: ' + escapeHtml(formatTime(p.failed_at)) + '</span>' +
                     '</div>' +
-                    '<div id="' + errId + '" class="error-reason" style="display: none;">' + escapeHtml(errMsg) + '</div>' +
-                    '<button type="button" class="show-error-btn" data-target="' + errId + '" aria-expanded="false">Show error</button>' +
+                    '<div class="error-reason">' + escapeHtml(errMsg) + '</div>' +
+                    '<div class="failed-actions">' +
+                    '<button type="button" class="btn-retry" data-id="' + pid + '">Retry</button> ' +
+                    '<button type="button" class="btn-cancel" data-id="' + pid + '">Cancel</button>' +
+                    '</div>' +
                     captionHtml +
                     '</div>';
             }).join('');
@@ -345,24 +369,37 @@ async function loadScheduleQueue() {
 
 document.getElementById('refresh-queue').addEventListener('click', loadScheduleQueue);
 
-// One-time: click on "Show error" / "Hide error" (works for dynamically loaded failed list)
-document.getElementById('failed-list').addEventListener('click', function (ev) {
+// Retry and Cancel buttons (work for dynamically loaded list)
+document.addEventListener('click', async function (ev) {
     var btn = ev.target;
-    if (!btn || !btn.classList || !btn.classList.contains('show-error-btn')) return;
-    var targetId = btn.getAttribute('data-target');
-    var el = targetId ? document.getElementById(targetId) : null;
-    if (!el) return;
-    var expanded = btn.getAttribute('aria-expanded') === 'true';
-    if (expanded) {
-        el.style.display = 'none';
-        btn.setAttribute('aria-expanded', 'false');
-        btn.textContent = 'Show error';
-    } else {
-        el.style.display = 'block';
-        btn.setAttribute('aria-expanded', 'true');
-        btn.textContent = 'Hide error';
+    if (!btn || !btn.classList) return;
+    var id = btn.getAttribute('data-id');
+    if (!id) return;
+    if (btn.classList.contains('btn-retry')) {
+        try {
+            var r = await fetch('/api/schedule/queue/' + encodeURIComponent(id) + '/retry', { method: 'PATCH', credentials: 'include' });
+            var data = await r.json().catch(function() { return {}; });
+            if (!r.ok) throw new Error(data.detail || 'Retry failed');
+            alert('Post requeued. It will be published when due.');
+            loadScheduleQueue();
+        } catch (e) {
+            alert('Retry failed: ' + (e.message || e));
+        }
+    } else if (btn.classList.contains('btn-cancel')) {
+        if (!confirm('Remove this post from the schedule?')) return;
+        try {
+            var r = await fetch('/api/schedule/queue/' + encodeURIComponent(id), { method: 'DELETE', credentials: 'include' });
+            var data = await r.json().catch(function() { return {}; });
+            if (!r.ok) throw new Error(data.detail || 'Cancel failed');
+            loadScheduleQueue();
+        } catch (e) {
+            alert('Cancel failed: ' + (e.message || e));
+        }
     }
 });
+
+// Auto-refresh every 60 seconds so UI updates when scheduler publishes/removes posts
+setInterval(loadScheduleQueue, 60000);
 
 // Load on page load
 loadScheduleQueue();

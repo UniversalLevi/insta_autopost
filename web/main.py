@@ -19,6 +19,7 @@ from .cloudflare_helper import start_cloudflare, stop_cloudflare, get_cloudflare
 from .instagram_webhook import process_webhook_payload
 from .scheduled_publisher import start_scheduled_publisher, stop_scheduled_publisher
 from .warming_scheduler import start_warming_scheduler, stop_warming_scheduler
+from .warmup_automation_scheduler import start_warmup_automation_scheduler, stop_warmup_automation_scheduler
 from src.app import InstaForgeApp
 from src.services.token_refresher import start_daily_token_refresh_job, stop_daily_token_refresh_job
 from src.utils.logger import get_logger
@@ -59,6 +60,7 @@ PUBLIC_ROUTES = {
     "/auth/meta/callback",
     "/auth/meta/redirect-uri",
     "/webhooks/instagram",
+    "/webhooks/instagram/",
     "/api/health",
 }
 PUBLIC_PREFIXES = ["/static/", "/uploads/"]
@@ -343,57 +345,62 @@ app.include_router(api_router)
 app.include_router(auth_router)
 
 # --- Instagram webhook (for Meta app verification & development) ---
-WEBHOOK_VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN", "my_test_token_for_instagram_verification")
+# Meta sends GET with hub.mode=subscribe&hub.verify_token=XXX&hub.challenge=YYY.
+# We must return 200 with body = challenge (plain text). Use same value in Meta and WEBHOOK_VERIFY_TOKEN.
+WEBHOOK_VERIFY_TOKEN = (os.environ.get("WEBHOOK_VERIFY_TOKEN") or "my_test_token_for_instagram_verification").strip()
+
+
+def _webhook_verify_get(request: Request):
+    """
+    Handle Meta webhook verification GET. Echo hub.challenge if verify_token matches.
+    Only treat as Meta verification when hub.mode=subscribe; otherwise return 200 so
+    browser visits and health checks never get 403.
+    """
+    from src.utils.logger import get_logger
+    webhook_logger = get_logger(__name__)
+
+    mode = (request.query_params.get("hub.mode") or "").strip()
+    token = (request.query_params.get("hub.verify_token") or "").strip()
+    challenge = (request.query_params.get("hub.challenge") or "").strip()
+
+    # Only run strict verification when Meta actually sends hub.mode=subscribe
+    if mode == "subscribe":
+        webhook_logger.info(
+            "Instagram webhook verification request",
+            has_token=bool(token),
+            token_matches=(token == WEBHOOK_VERIFY_TOKEN) if token else False,
+            has_challenge=bool(challenge),
+            url=str(request.url),
+        )
+        if token == WEBHOOK_VERIFY_TOKEN and challenge:
+            webhook_logger.info("Instagram webhook verification successful")
+            return PlainTextResponse(content=challenge, status_code=200)
+        webhook_logger.warning(
+            "Instagram webhook verification failed (403). Use the same Verify token in Meta as WEBHOOK_VERIFY_TOKEN in .env.",
+            token_matches=(token == WEBHOOK_VERIFY_TOKEN) if token else False,
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="Verification failed: verify_token must match WEBHOOK_VERIFY_TOKEN",
+        )
+
+    # Not a Meta verification GET (browser visit, health check, or missing params): return 200
+    return PlainTextResponse(
+        content="Webhook endpoint OK. Use this URL as Callback URL in Meta; set Verify token to the value of WEBHOOK_VERIFY_TOKEN in .env.",
+        status_code=200,
+    )
 
 
 @app.get("/webhooks/instagram", response_class=PlainTextResponse)
 async def webhook_instagram_verify(request: Request):
-    """
-    Meta sends GET with hub.mode, hub.verify_token, hub.challenge.
-    Echo hub.challenge if verify_token matches. Use this URL as Callback URL in your app.
-    """
-    from src.utils.logger import get_logger
-    webhook_logger = get_logger(__name__)
-    
-    mode = request.query_params.get("hub.mode")
-    token = request.query_params.get("hub.verify_token")
-    challenge = request.query_params.get("hub.challenge")
-    
-    webhook_logger.info(
-        "Instagram webhook verification request",
-        mode=mode,
-        has_token=bool(token),
-        token_length=len(token) if token else 0,
-        expected_token=WEBHOOK_VERIFY_TOKEN,
-        token_matches=(token == WEBHOOK_VERIFY_TOKEN) if token else False,
-        has_challenge=bool(challenge),
-        url=str(request.url),
-    )
-    
-    if mode == "subscribe" and token == WEBHOOK_VERIFY_TOKEN and challenge:
-        webhook_logger.info(
-            "Instagram webhook verification successful",
-            challenge_length=len(challenge),
-        )
-        return PlainTextResponse(content=challenge)
-    
-    webhook_logger.warning(
-        "Instagram webhook verification failed",
-        mode=mode,
-        token_provided=bool(token),
-        token_matches=(token == WEBHOOK_VERIFY_TOKEN) if token else False,
-        has_challenge=bool(challenge),
-    )
-    webhook_logger.warning(
-        "Instagram webhook verification failed",
-        mode=mode,
-        token_provided=bool(token),
-        token_matches=(token == WEBHOOK_VERIFY_TOKEN) if token else False,
-        has_challenge=bool(challenge),
-        provided_token_preview=token[:10] + "..." if token and len(token) > 10 else token,
-        expected_token_preview=WEBHOOK_VERIFY_TOKEN[:10] + "..." if len(WEBHOOK_VERIFY_TOKEN) > 10 else WEBHOOK_VERIFY_TOKEN,
-    )
-    raise HTTPException(status_code=403, detail="Verification failed")
+    """Meta callback URL: GET with hub.mode, hub.verify_token, hub.challenge. Returns challenge on success."""
+    return _webhook_verify_get(request)
+
+
+@app.get("/webhooks/instagram/", response_class=PlainTextResponse)
+async def webhook_instagram_verify_trailing_slash(request: Request):
+    """Same as /webhooks/instagram so Meta validation works with or without trailing slash."""
+    return _webhook_verify_get(request)
 
 
 @app.post("/webhooks/instagram")
@@ -520,6 +527,13 @@ async def startup_event():
             except Exception as e:
                 logger.error(f"Failed to start warming scheduler: {e}", exc_info=True)
                 print(f"Warning: Warming scheduler failed to start: {e}")
+
+            # Start warm-up automation scheduler
+            try:
+                start_warmup_automation_scheduler(instaforge_app)
+                print("Warm-up automation scheduler started")
+            except Exception as e:
+                logger.error(f"Failed to start warmup automation scheduler: {e}", exc_info=True)
             
             # Start account health monitoring
             if instaforge_app.account_health_service:
@@ -585,6 +599,12 @@ async def shutdown_event():
             stop_warming_scheduler()
         except Exception as e:
             logger.warning("Error stopping warming scheduler", error=str(e))
+
+        try:
+            logger.info("Stopping warmup automation scheduler...")
+            stop_warmup_automation_scheduler()
+        except Exception as e:
+            logger.warning("Error stopping warmup automation scheduler", error=str(e))
         
         # Close browser automation with await (we're in async context; sync close_all uses run_until_complete on same loop → fails)
         try:
@@ -639,17 +659,22 @@ async def accounts_page(request: Request):
     return HTMLResponse(content=content)
 
 
-@app.get("/schedule", response_class=HTMLResponse)
-async def schedule_page(request: Request):
-    """Schedule queue and failed posts page"""
-    content = render_template("schedule.html", {"request": request})
+@app.get("/warmup", response_class=HTMLResponse)
+async def warmup_page(request: Request):
+    """5-Day Account Warm-Up dashboard page"""
+    content = await render_template_async("warmup.html", {"request": request})
     return HTMLResponse(content=content)
 
 
 @app.get("/webhook-test", response_class=HTMLResponse)
 async def webhook_test_page(request: Request):
     """Webhook and AI DM test page"""
-    content = await render_template_async("webhook-test.html", {"request": request})
+    from .webhook_config import get_webhook_config
+    webhook_config = get_webhook_config()
+    content = await render_template_async(
+        "webhook-test.html",
+        {"request": request, "webhook_config": webhook_config}
+    )
     return HTMLResponse(content=content)
 
 
@@ -664,6 +689,13 @@ async def config_page(request: Request):
 async def ai_settings_page(request: Request):
     """AI Settings page"""
     content = await render_template_async("ai-settings.html", {"request": request})
+    return HTMLResponse(content=content)
+
+
+@app.get("/inbox", response_class=HTMLResponse)
+async def inbox_page(request: Request):
+    """AI DM Inbox - view users, messages, AI suggestions, approve/send"""
+    content = await render_template_async("inbox.html", {"request": request})
     return HTMLResponse(content=content)
 
 

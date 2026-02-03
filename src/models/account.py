@@ -59,9 +59,11 @@ class AIDMConfig(BaseModel):
     - Automated AI-powered replies to incoming DMs
     - Rate limiting (max 10 replies per user per day)
     - Natural, human-like responses using OpenAI
+    - auto_send: if False, generate reply for inbox review instead of sending
     """
     enabled: bool = False  # Enable/disable AI DM auto-reply
-    
+    auto_send: bool = True  # If True, send automatically; if False, show in inbox for approval
+
     class Config:
         frozen = True
 

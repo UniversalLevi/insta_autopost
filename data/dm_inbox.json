@@ -1,0 +1,28 @@
+{
+  "conversations": {
+    "acc1:u1": {
+      "account_id": "acc1",
+      "user_id": "u1",
+      "username": "testuser",
+      "last_message": "Hello",
+      "last_timestamp": "2026-02-02T21:24:42.221448",
+      "message_count": 1,
+      "ai_reply_suggested": null,
+      "status": "received"
+    }
+  },
+  "messages": [
+    {
+      "account_id": "acc1",
+      "user_id": "u1",
+      "username": "testuser",
+      "message": "Hello",
+      "timestamp": "2026-02-02T21:24:42.221448",
+      "message_id": "m1",
+      "ai_reply_suggested": null,
+      "sent_at": null,
+      "status": "received"
+    }
+  ],
+  "updated_at": "2026-02-02T21:24:42.221448"
+}

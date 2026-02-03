@@ -141,3 +141,98 @@ class BrowserService:
     async def close_all(self):
         """Close all browsers"""
         await self.browser_manager.close_all()
+
+    async def save_post(
+        self,
+        account_id: str,
+        post_url: str,
+        username: str,
+        password=None,
+        proxy_url=None,
+    ) -> Dict:
+        """Save (bookmark) a post via browser."""
+        try:
+            logged_in = await self.ensure_account_logged_in(account_id, username, password, proxy_url)
+            if not logged_in:
+                return {"action": "save", "post_url": post_url, "status": "failed", "error": "Not logged in"}
+            page = await self.browser_manager.get_page_for_account(account_id, proxy_url)
+            from .actions.save_action import BrowserSaveAction
+            action = BrowserSaveAction(page)
+            return await action.save_post_by_url(post_url)
+        except Exception as e:
+            logger.error("Save failed", account_id=account_id, error=str(e))
+            return {"action": "save", "post_url": post_url, "status": "failed", "error": str(e)}
+
+    async def follow_profile(
+        self,
+        account_id: str,
+        profile_url: str,
+        username: str,
+        password=None,
+        proxy_url=None,
+    ) -> Dict:
+        """Follow a profile via browser."""
+        try:
+            logged_in = await self.ensure_account_logged_in(account_id, username, password, proxy_url)
+            if not logged_in:
+                return {"action": "follow", "profile_url": profile_url, "status": "failed", "error": "Not logged in"}
+            page = await self.browser_manager.get_page_for_account(account_id, proxy_url)
+            from .actions.follow_action import BrowserFollowAction
+            action = BrowserFollowAction(page)
+            return await action.follow_by_profile_url(profile_url)
+        except Exception as e:
+            logger.error("Follow failed", account_id=account_id, error=str(e))
+            return {"action": "follow", "profile_url": profile_url, "status": "failed", "error": str(e)}
+
+    async def comment_on_post(
+        self,
+        account_id: str,
+        post_url: str,
+        text: str,
+        username: str,
+        password=None,
+        proxy_url=None,
+    ) -> Dict:
+        """Comment on a post via browser."""
+        try:
+            logged_in = await self.ensure_account_logged_in(account_id, username, password, proxy_url)
+            if not logged_in:
+                return {"action": "comment", "post_url": post_url, "status": "failed", "error": "Not logged in"}
+            page = await self.browser_manager.get_page_for_account(account_id, proxy_url)
+            from .actions.comment_action import BrowserCommentAction
+            action = BrowserCommentAction(page)
+            return await action.comment_on_post_by_url(post_url, text)
+        except Exception as e:
+            logger.error("Comment failed", account_id=account_id, error=str(e))
+            return {"action": "comment", "post_url": post_url, "status": "failed", "error": str(e)}
+
+    async def discover_post_urls(
+        self,
+        account_id: str,
+        hashtags: list,
+        limit_per_hashtag: int = 5,
+        username: str = "",
+        password=None,
+        proxy_url=None,
+    ) -> list:
+        """Discover post URLs from hashtag pages."""
+        urls = []
+        try:
+            logged_in = await self.ensure_account_logged_in(account_id, username, password, proxy_url)
+            if not logged_in:
+                return []
+            page = await self.browser_manager.get_page_for_account(account_id, proxy_url)
+            from .actions.explore_action import BrowserExploreAction
+            action = BrowserExploreAction(page)
+            for tag in (hashtags or ["explore"])[:3]:
+                found = await action.get_post_urls_from_hashtag(tag, limit=limit_per_hashtag)
+                for u in found:
+                    if u not in urls:
+                        urls.append(u)
+                if len(urls) >= limit_per_hashtag * 3:
+                    break
+            if not urls:
+                urls = await action.get_post_urls_from_explore(limit=10)
+        except Exception as e:
+            logger.warning("Discovery failed", account_id=account_id, error=str(e))
+        return urls

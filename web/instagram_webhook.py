@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 from src.utils.logger import get_logger
 from src.utils.exceptions import AccountError
 from src.features.ai_dm import AIDMHandler
+from src.features.ai_dm.dm_inbox_store import add_message as inbox_add_message, update_suggestion as inbox_update_suggestion, mark_sent as inbox_mark_sent
 
 logger = get_logger(__name__)
 
@@ -154,29 +155,7 @@ def _process_incoming_dm_for_ai_reply(account_id: str, value: Dict[str, Any], ap
         )
         return
     
-    # Check if AI DM is enabled
-    ai_dm_enabled = False
-    if hasattr(account, 'ai_dm') and account.ai_dm:
-        ai_dm_enabled = account.ai_dm.enabled
-    
-    logger.info(
-        "AI_DM_WEBHOOK",
-        action="config_check",
-        account_id=account_id,
-        ai_dm_enabled=ai_dm_enabled,
-        has_ai_dm_config=hasattr(account, 'ai_dm') and account.ai_dm is not None,
-    )
-    
-    if not ai_dm_enabled:
-        logger.info(
-            "AI_DM_WEBHOOK",
-            action="skipped",
-            reason="ai_dm_disabled",
-            account_id=account_id,
-        )
-        return
-    
-    # Extract message data from webhook payload
+    # Extract message data from webhook payload (before ai_dm check - needed for inbox store)
     # Instagram webhook structure can vary:
     # Option 1: value contains "from" and "message" directly
     # Option 2: value contains "messaging" -> "sender" and "message"
@@ -314,7 +293,35 @@ def _process_incoming_dm_for_ai_reply(account_id: str, value: Dict[str, Any], ap
             message_obj=message_obj,
         )
         return
-    
+
+    # Always store incoming DM for inbox UI
+    try:
+        inbox_add_message(
+            account_id=account_id,
+            user_id=str(user_id),
+            username=username or "",
+            message=message_text,
+            message_id=str(message_id) if message_id else None,
+        )
+    except Exception as e:
+        logger.warning("DM inbox store failed", error=str(e), account_id=account_id, user_id=user_id)
+
+    # Check if AI DM is enabled
+    ai_dm_enabled = False
+    auto_send = True
+    if hasattr(account, "ai_dm") and account.ai_dm:
+        ai_dm_enabled = account.ai_dm.enabled
+        auto_send = getattr(account.ai_dm, "auto_send", True)
+
+    if not ai_dm_enabled:
+        logger.info(
+            "AI_DM_WEBHOOK",
+            action="skipped",
+            reason="ai_dm_disabled",
+            account_id=account_id,
+        )
+        return
+
     logger.info(
         "AI_DM_WEBHOOK",
         action="processing",
@@ -322,8 +329,9 @@ def _process_incoming_dm_for_ai_reply(account_id: str, value: Dict[str, Any], ap
         user_id=user_id,
         message_id=message_id,
         message_preview=message_text[:100],
+        auto_send=auto_send,
     )
-    
+
     # Initialize AI DM handler
     try:
         ai_handler = AIDMHandler()
@@ -341,7 +349,29 @@ def _process_incoming_dm_for_ai_reply(account_id: str, value: Dict[str, Any], ap
             )
             return
         
-        # Process incoming DM and get AI reply
+        if not auto_send:
+            # Review mode: generate AI reply, store for inbox, don't send
+            reply_text = ai_handler.get_ai_reply(
+                message=message_text,
+                account_id=account_id,
+                user_id=str(user_id),
+                account_username=account.username,
+            )
+            if reply_text:
+                try:
+                    inbox_update_suggestion(account_id, str(user_id), reply_text)
+                except Exception as e:
+                    logger.warning("Inbox update suggestion failed", error=str(e))
+            logger.info(
+                "AI_DM_WEBHOOK",
+                action="suggestion_stored",
+                account_id=account_id,
+                user_id=user_id,
+                auto_send=False,
+            )
+            return
+
+        # Auto-send mode: process and send
         result = ai_handler.process_incoming_dm(
             account_id=account_id,
             user_id=str(user_id),
@@ -360,7 +390,7 @@ def _process_incoming_dm_for_ai_reply(account_id: str, value: Dict[str, Any], ap
             error_type=type(e).__name__,
         )
         return
-    
+
     # Send reply if generated
     # Note: We send even if status is "fallback" - that's the fallback message
     reply_text = result.get("reply_text")
@@ -411,6 +441,10 @@ def _process_incoming_dm_for_ai_reply(account_id: str, value: Dict[str, Any], ap
             )
             
             if dm_result.get("status") == "success":
+                try:
+                    inbox_mark_sent(account_id, str(user_id))
+                except Exception as e:
+                    logger.warning("Inbox mark_sent failed", error=str(e))
                 logger.info(
                     "AI_DM_WEBHOOK",
                     action="reply_sent",

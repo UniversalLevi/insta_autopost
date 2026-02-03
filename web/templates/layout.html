@@ -29,11 +29,17 @@
                 <a href="/ai-settings" class="nav-item {% if request.url.path == '/ai-settings' %}active{% endif %}">
                     <span class="icon">🤖</span> AI Customization
                 </a>
+                <a href="/inbox" class="nav-item {% if request.url.path == '/inbox' %}active{% endif %}">
+                    <span class="icon">✉️</span> DM Inbox
+                </a>
                 <a href="/accounts" class="nav-item {% if request.url.path == '/accounts' %}active{% endif %}">
                     <span class="icon">👥</span> Account Status
                 </a>
                 <a href="/schedule" class="nav-item {% if request.url.path == '/schedule' %}active{% endif %}">
                     <span class="icon">📅</span> Schedule Queue
+                </a>
+                <a href="/warmup" class="nav-item {% if request.url.path == '/warmup' %}active{% endif %}">
+                    <span class="icon">🔥</span> 5-Day Warm-Up
                 </a>
                 <a href="/webhook-test" class="nav-item {% if request.url.path == '/webhook-test' %}active{% endif %}">
                     <span class="icon">🔗</span> Webhook Test

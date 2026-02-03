@@ -29,7 +29,7 @@ from src.models.post import PostMedia, Post, PostStatus
 from src.models.account import Account, ProxyConfig, WarmingConfig, CommentToDMConfig, AIDMConfig
 from src.app import InstaForgeApp
 from src.utils.config import config_manager, Settings
-from src.services.scheduled_posts_store import add_scheduled, load_scheduled
+from src.services.scheduled_posts_store import add_scheduled, load_scheduled, set_scheduled_status, cancel_scheduled
 from src.services.batch_upload_service import (
     extract_zip,
     validate_file,
@@ -51,7 +51,6 @@ from src.services.user_store import user_store
 from src.models.user import User
 from web.auth_deps import get_current_user, require_admin, require_auth
 from fastapi.responses import Response
-from src_v2.core.config import is_v2_enabled
 
 try:
     from .cloudflare_helper import get_cloudflare_url
@@ -115,17 +114,7 @@ async def health_check():
 
 @router.get("/version")
 async def version_check():
-    """
-    Lightweight mode/version probe for orchestration and monitoring.
-
-    - When USE_V2 is unset or false: reports legacy v1 mode.
-    - When USE_V2 is true (case-insensitive): reports v2 safe mode.
-    """
-    if is_v2_enabled():
-        return {
-            "mode": "safe",
-            "version": "v2",
-        }
+    """Lightweight mode/version probe for orchestration and monitoring."""
     return {
         "mode": "legacy",
         "version": "v1",
@@ -1278,6 +1267,205 @@ async def get_schedule_queue(
         raise HTTPException(status_code=500, detail=f"Failed to get schedule queue: {str(e)}")
 
 
+@router.patch("/schedule/queue/{post_id}/retry")
+async def retry_scheduled_post(
+    post_id: str,
+    current_user: User = Depends(require_auth),
+):
+    """Requeue a failed post: set status back to 'scheduled' so it will be published when due."""
+    ok = set_scheduled_status(post_id, "scheduled", error_message=None)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Post not found or not failed")
+    return {"status": "success", "message": "Post requeued. It will be published when due."}
+
+
+@router.delete("/schedule/queue/{post_id}")
+async def remove_scheduled_post(
+    post_id: str,
+    current_user: User = Depends(require_auth),
+):
+    """Remove a post from the schedule queue (scheduled or failed)."""
+    ok = cancel_scheduled(post_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Post not found")
+    return {"status": "success", "message": "Post removed from schedule."}
+
+
+# --- 5-Day Warm-Up Endpoints (Phase 7) ---
+
+@router.post("/warmup/start")
+async def warmup_start(
+    body: dict,
+    current_user: User = Depends(require_auth),
+):
+    """Start a 5-day warm-up for an account."""
+    from src.features.warmup.warmup_engine import WarmupEngine
+    account_id = body.get("account_id")
+    if not account_id:
+        raise HTTPException(status_code=400, detail="account_id required")
+    try:
+        engine = WarmupEngine()
+        plan = engine.start_warmup(account_id, instagram_id=body.get("instagram_id"))
+        return {"status": "success", "plan": plan, "message": "Warm-up started"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("Warmup start failed", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/warmup/status")
+async def warmup_status(
+    account_id: str,
+    current_user: User = Depends(require_auth),
+):
+    """Get warm-up status and today's plan for an account."""
+    from src.features.warmup.warmup_store import get_warmup_plan
+    from src.features.warmup.warmup_engine import WarmupEngine
+    plan = get_warmup_plan(account_id)
+    if not plan:
+        return {"plan": None, "tasks": []}
+    engine = WarmupEngine()
+    today = engine.get_today_plan(account_id)
+    if not today:
+        return {"plan": plan, "tasks": []}
+    return {"plan": plan, "tasks": today.get("tasks", [])}
+
+
+@router.post("/warmup/complete-task")
+async def warmup_complete_task(
+    body: dict,
+    current_user: User = Depends(require_auth),
+):
+    """Mark a task as done."""
+    from src.features.warmup.warmup_engine import WarmupEngine
+    account_id = body.get("account_id")
+    task_id = body.get("task_id")
+    count = body.get("count", 1)
+    if not account_id or not task_id:
+        raise HTTPException(status_code=400, detail="account_id and task_id required")
+    engine = WarmupEngine()
+    updated = engine.mark_task_done(account_id, task_id, count=count)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Plan not found or not active")
+    return {"status": "success", "plan": updated}
+
+
+@router.post("/warmup/complete-day")
+async def warmup_complete_day(
+    body: dict,
+    current_user: User = Depends(require_auth),
+):
+    """Mark current day complete and advance (or finish on Day 5)."""
+    from src.features.warmup.warmup_engine import WarmupEngine
+    from src.features.warmup.warmup_store import get_warmup_plan, save_warmup_report
+    account_id = body.get("account_id")
+    if not account_id:
+        raise HTTPException(status_code=400, detail="account_id required")
+    engine = WarmupEngine()
+    plan = get_warmup_plan(account_id)
+    updated = engine.complete_day(account_id)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Plan not found or not active")
+    # If finished (Day 5), save report
+    if updated.get("status") == "completed":
+        from datetime import datetime
+        save_warmup_report({
+            "account_id": account_id,
+            "completed_at": datetime.utcnow().isoformat(),
+            "start_date": plan.get("start_date"),
+            "engagement_change": "N/A",
+            "reach_improvement": "N/A",
+            "account_health": "Ready for automation",
+            "recommendation": "Account warm-up completed. Normal automation allowed.",
+        })
+        logger.info("Warm-up completed, report saved", account_id=account_id)
+    return {"status": "success", "plan": updated}
+
+
+@router.post("/warmup/pause")
+async def warmup_pause(
+    body: dict,
+    current_user: User = Depends(require_auth),
+):
+    """Pause warm-up."""
+    from src.features.warmup.warmup_engine import WarmupEngine
+    account_id = body.get("account_id")
+    reason = body.get("reason", "Paused by user")
+    if not account_id:
+        raise HTTPException(status_code=400, detail="account_id required")
+    engine = WarmupEngine()
+    updated = engine.pause_warmup(account_id, reason)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    return {"status": "success", "plan": updated}
+
+
+@router.post("/warmup/resume")
+async def warmup_resume(
+    body: dict,
+    current_user: User = Depends(require_auth),
+):
+    """Resume a paused warm-up."""
+    from src.features.warmup.warmup_engine import WarmupEngine
+    account_id = body.get("account_id")
+    if not account_id:
+        raise HTTPException(status_code=400, detail="account_id required")
+    engine = WarmupEngine()
+    updated = engine.resume_warmup(account_id)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Plan not found or not paused")
+    return {"status": "success", "plan": updated}
+
+
+@router.get("/warmup/automation-config")
+async def get_warmup_automation_config(
+    account_id: str,
+    current_user: User = Depends(require_auth),
+):
+    """Get warm-up automation config for an account."""
+    from src.features.warmup.warmup_automation_config import get_config
+    return get_config(account_id)
+
+
+@router.put("/warmup/automation-config")
+async def update_warmup_automation_config(
+    body: dict,
+    current_user: User = Depends(require_auth),
+):
+    """Update warm-up automation config."""
+    from src.features.warmup.warmup_automation_config import set_config
+    account_id = body.get("account_id")
+    if not account_id:
+        raise HTTPException(status_code=400, detail="account_id required")
+    updates = {k: v for k, v in body.items() if k in ("automation_enabled", "target_hashtags", "schedule_times")}
+    cfg = set_config(account_id, updates)
+    return {"status": "success", "config": cfg}
+
+
+@router.post("/warmup/run-automation")
+async def run_warmup_automation_now(
+    body: dict,
+    app: InstaForgeApp = Depends(get_app),
+    current_user: User = Depends(require_auth),
+):
+    """Manually trigger warm-up automation for an account (runs in thread pool)."""
+    from src.features.warmup.warmup_automation import WarmupAutomation
+    account_id = body.get("account_id")
+    if not account_id:
+        raise HTTPException(status_code=400, detail="account_id required")
+    automation = WarmupAutomation(
+        app.account_service,
+        getattr(app, "browser_wrapper", None),
+    )
+
+    def _run():
+        return automation.run_for_account(account_id)
+
+    result = await run_in_threadpool(_run)
+    return {"status": "success", "result": result}
+
+
 # --- Status & Utils ---
 
 @router.get("/status", response_model=StatusResponse)
@@ -2070,6 +2258,140 @@ async def test_ai_dm_status(app: InstaForgeApp = Depends(get_app)):
         }
 
 
+# --- AI DM Inbox Endpoints ---
+
+@router.get("/ai-dm/accounts")
+async def get_ai_dm_accounts(
+    app: InstaForgeApp = Depends(get_app),
+    current_user: User = Depends(require_auth),
+):
+    """List accounts for inbox (same source as webhooks: config + OAuth)."""
+    try:
+        accounts = app.account_service.list_accounts()
+        if current_user.role != "admin":
+            accounts = [a for a in accounts if getattr(a, "owner_id", None) == current_user.id or getattr(a, "owner_id", None) is None]
+        return {
+            "accounts": [
+                {"account_id": a.account_id, "username": getattr(a, "username", "") or a.account_id}
+                for a in accounts
+            ],
+        }
+    except Exception as e:
+        logger.exception("AI DM accounts list failed", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/ai-dm/inbox")
+async def get_ai_dm_inbox(
+    account_id: str,
+    current_user: User = Depends(require_auth),
+):
+    """List conversations (users + last message) for inbox UI."""
+    try:
+        from src.features.ai_dm.dm_inbox_store import list_conversations
+        convs = list_conversations(account_id)
+        return {"account_id": account_id, "conversations": convs}
+    except Exception as e:
+        logger.exception("AI DM inbox list failed", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/ai-dm/inbox/{user_id}/messages")
+async def get_ai_dm_inbox_messages(
+    user_id: str,
+    account_id: str,
+    current_user: User = Depends(require_auth),
+):
+    """Get messages for a conversation."""
+    try:
+        from src.features.ai_dm.dm_inbox_store import get_messages
+        msgs = get_messages(account_id, user_id)
+        return {"account_id": account_id, "user_id": user_id, "messages": msgs}
+    except Exception as e:
+        logger.exception("AI DM inbox messages failed", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/ai-dm/inbox/{user_id}/suggest-reply")
+async def suggest_ai_dm_reply(
+    user_id: str,
+    body: dict,
+    app: InstaForgeApp = Depends(get_app),
+    current_user: User = Depends(require_auth),
+):
+    """Generate AI reply suggestion (no send)."""
+    account_id = body.get("account_id") or body.get("account")
+    message = body.get("message") or body.get("last_message")
+    if not account_id:
+        raise HTTPException(status_code=400, detail="account_id required")
+    if not message:
+        from src.features.ai_dm.dm_inbox_store import get_messages
+        msgs = get_messages(account_id, user_id)
+        if msgs:
+            message = msgs[-1].get("message", "")
+        if not message:
+            raise HTTPException(status_code=400, detail="message required or no messages in conversation")
+    try:
+        from src.features.ai_dm import AIDMHandler
+        from src.features.ai_dm.dm_inbox_store import update_suggestion
+        handler = AIDMHandler()
+        if not handler.is_available():
+            raise HTTPException(status_code=503, detail="OpenAI not configured")
+        account = app.account_service.get_account(account_id)
+        account_username = account.username if account else None
+        reply = handler.get_ai_reply(
+            message=message,
+            account_id=account_id,
+            user_id=user_id,
+            account_username=account_username,
+        )
+        update_suggestion(account_id, user_id, reply)
+        return {"account_id": account_id, "user_id": user_id, "suggested_reply": reply}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("AI DM suggest reply failed", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/ai-dm/inbox/{user_id}/send-reply")
+async def send_ai_dm_reply(
+    user_id: str,
+    body: dict,
+    app: InstaForgeApp = Depends(get_app),
+    current_user: User = Depends(require_auth),
+):
+    """Send a reply (manual approval from inbox)."""
+    account_id = body.get("account_id") or body.get("account")
+    reply_text = body.get("reply_text") or body.get("reply")
+    username = body.get("username", "")
+    if not account_id or not reply_text:
+        raise HTTPException(status_code=400, detail="account_id and reply_text required")
+    try:
+        from src.utils.exceptions import AccountError
+        from src.features.ai_dm.dm_inbox_store import mark_sent
+        client = app.account_service.get_client(account_id)
+        dm_result = client.send_direct_message(
+            recipient_username=username,
+            message=reply_text,
+            recipient_id=user_id,
+        )
+        if dm_result.get("status") == "success":
+            mark_sent(account_id, user_id)
+            return {"status": "success", "dm_id": dm_result.get("dm_id")}
+        raise HTTPException(
+            status_code=400,
+            detail=dm_result.get("error", "Send failed"),
+        )
+    except AccountError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("AI DM send reply failed", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/webhooks/callback-url")
 async def get_webhook_callback_url():
     """
@@ -2077,27 +2399,14 @@ async def get_webhook_callback_url():
     In Meta app: set Callback URL to production_url (e.g. https://veilforce.com/webhooks/instagram).
     Do NOT use this /api/webhooks/callback-url path as the Callback URL in Meta.
     """
-    from .cloudflare_helper import get_cloudflare_url
-    verify_token = os.environ.get("WEBHOOK_VERIFY_TOKEN", "my_test_token_for_instagram_verification")
-    
-    BASE_URL = os.getenv("BASE_URL", "").strip().rstrip("/")
-    if BASE_URL:
-        callback_url = f"{BASE_URL}/webhooks/instagram"
-        production_url = callback_url
-    else:
-        base = get_cloudflare_url()
-        if base:
-            callback_url = f"{base.rstrip('/')}/webhooks/instagram"
-        else:
-            callback_url = None
-        production_url = "https://veilforce.com/webhooks/instagram"
-    
+    from web.webhook_config import get_webhook_config
+    cfg = get_webhook_config()
     return {
-        "callback_url": callback_url or production_url,
-        "verify_token": verify_token,
-        "production_url": production_url,
-        "meta_callback_url": production_url,
-        "note": "In Meta app: set Callback URL to production_url; set Verify token to verify_token above. On veilforce.com server set BASE_URL=https://veilforce.com. Do NOT use /api/webhooks/callback-url as Callback URL.",
+        "callback_url": cfg["callback_url"],
+        "verify_token": cfg["verify_token"],
+        "production_url": cfg["production_url"],
+        "meta_callback_url": cfg["production_url"],
+        "note": "In Meta app: set Callback URL to production_url; set Verify token to verify_token above. Do NOT use /api/webhooks/callback-url as Callback URL.",
     }
 
 

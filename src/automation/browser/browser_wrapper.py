@@ -73,11 +73,37 @@ class BrowserWrapper:
         try:
             loop = self._get_event_loop()
             if loop.is_running():
-                # If loop is running, schedule close_all as a task
                 import asyncio
                 asyncio.create_task(self.browser_service.close_all())
             else:
                 loop.run_until_complete(self.browser_service.close_all())
         except RuntimeError:
-            # Event loop might be closed during shutdown
             pass
+
+    def save_post_sync(self, account_id: str, post_url: str, username: str, password=None, proxy_url=None) -> Dict:
+        """Save a post (sync wrapper)."""
+        loop = self._get_event_loop()
+        return loop.run_until_complete(
+            self.browser_service.save_post(account_id, post_url, username, password, proxy_url)
+        )
+
+    def follow_profile_sync(self, account_id: str, profile_url: str, username: str, password=None, proxy_url=None) -> Dict:
+        """Follow a profile (sync wrapper)."""
+        loop = self._get_event_loop()
+        return loop.run_until_complete(
+            self.browser_service.follow_profile(account_id, profile_url, username, password, proxy_url)
+        )
+
+    def comment_on_post_sync(self, account_id: str, post_url: str, text: str, username: str, password=None, proxy_url=None) -> Dict:
+        """Comment on a post (sync wrapper)."""
+        loop = self._get_event_loop()
+        return loop.run_until_complete(
+            self.browser_service.comment_on_post(account_id, post_url, text, username, password, proxy_url)
+        )
+
+    def discover_post_urls_sync(self, account_id: str, hashtags: list, limit_per_hashtag: int = 5, username: str = "", password=None, proxy_url=None) -> list:
+        """Discover post URLs (sync wrapper)."""
+        loop = self._get_event_loop()
+        return loop.run_until_complete(
+            self.browser_service.discover_post_urls(account_id, hashtags, limit_per_hashtag, username, password, proxy_url)
+        )

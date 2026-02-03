@@ -1,0 +1,244 @@
+{% extends "layout.html" %}
+
+{% block title %}DM Inbox - InstaForge{% endblock %}
+{% block page_title %}DM Inbox{% endblock %}
+
+{% block content %}
+<div class="inbox-container">
+    <p class="text-muted" style="margin-bottom: 1rem;">View users who messaged you, their messages, and AI-generated replies. Approve and send manually or enable auto-send in AI settings.</p>
+
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <label class="form-label">Account</label>
+        <select id="inbox-account" class="form-control" style="max-width: 300px;">
+            <option value="">Loading...</option>
+        </select>
+    </div>
+
+    <div id="inbox-loading" class="loading-overlay" style="display: none;">
+        <div class="loading-spinner"></div>
+        <p>Loading conversations...</p>
+    </div>
+
+    <div id="inbox-empty" class="card" style="display: none; text-align: center; padding: 2rem;">
+        <p>No DMs yet. Messages will appear here when users message your account.</p>
+    </div>
+
+    <div id="inbox-content" style="display: none;">
+        <div class="card">
+            <div class="card-header">
+                <h3>Conversations</h3>
+                <button id="refresh-inbox" class="btn btn-secondary">Refresh</button>
+            </div>
+            <div class="card-body">
+                <div id="conversations-list" class="conversations-list"></div>
+            </div>
+        </div>
+
+        <div id="conversation-detail" class="card" style="display: none; margin-top: 1.5rem;">
+            <div class="card-header">
+                <h3 id="detail-username">—</h3>
+                <button id="close-detail" class="btn btn-secondary">Close</button>
+            </div>
+            <div class="card-body">
+                <div id="messages-thread" class="messages-thread"></div>
+                <div class="inbox-reply-section">
+                    <label class="form-label">AI Suggested Reply</label>
+                    <textarea id="reply-text" class="form-control" rows="3" placeholder="Click 'Generate AI Reply' or edit manually"></textarea>
+                    <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                        <button id="suggest-reply-btn" class="btn btn-secondary">Generate AI Reply</button>
+                        <button id="send-reply-btn" class="btn btn-primary">Send Reply</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.conversations-list { display: grid; gap: 0.75rem; }
+.conv-item { display: flex; justify-content: space-between; align-items: flex-start; padding: 1rem; background: #f9fafb; border-radius: 8px; border-left: 4px solid #6366f1; cursor: pointer; }
+.conv-item:hover { background: #f3f4f6; }
+.conv-item .conv-name { font-weight: 600; color: #111827; }
+.conv-item .conv-msg { font-size: 0.875rem; color: #6b7280; margin-top: 0.25rem; }
+.conv-item .conv-suggestion { font-size: 0.8rem; color: #059669; margin-top: 0.5rem; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.messages-thread { max-height: 300px; overflow-y: auto; margin-bottom: 1rem; padding: 0.5rem; background: #f9fafb; border-radius: 6px; }
+.msg-item { padding: 0.5rem; margin-bottom: 0.5rem; background: white; border-radius: 4px; font-size: 0.9rem; }
+.msg-item .msg-meta { font-size: 0.75rem; color: #9ca3af; }
+.inbox-reply-section { margin-top: 1rem; }
+.card-header { display: flex; justify-content: space-between; align-items: center; }
+</style>
+
+<script>
+const api = (path, opts = {}) => fetch('/api' + path, { credentials: 'include', ...opts });
+
+function esc(s) {
+    if (s == null || s === undefined) return '';
+    const div = document.createElement('div');
+    div.textContent = String(s);
+    return div.innerHTML;
+}
+
+async function loadAccounts() {
+    const sel = document.getElementById('inbox-account');
+    try {
+        const r = await api('/ai-dm/accounts');
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) {
+            sel.innerHTML = '<option value="">' + esc(d.detail || d.error || 'Failed to load accounts') + '</option>';
+            return [];
+        }
+        const accounts = d.accounts || [];
+        sel.innerHTML = '<option value="">Select account...</option>' + accounts.map(a =>
+            `<option value="${esc(a.account_id)}">${esc(a.username || a.account_id)}</option>`
+        ).join('');
+        sel.onchange = loadConversations;
+        return accounts;
+    } catch (e) {
+        sel.innerHTML = '<option value="">Failed to load accounts</option>';
+        console.error(e);
+        return [];
+    }
+}
+
+async function loadConversations() {
+    const accountId = document.getElementById('inbox-account').value;
+    if (!accountId) return;
+    document.getElementById('inbox-loading').style.display = 'flex';
+    document.getElementById('inbox-empty').style.display = 'none';
+    document.getElementById('inbox-content').style.display = 'none';
+    try {
+        const r = await api(`/ai-dm/inbox?account_id=${encodeURIComponent(accountId)}`);
+        const d = await r.json().catch(() => ({}));
+        document.getElementById('inbox-loading').style.display = 'none';
+        if (!r.ok) {
+            document.getElementById('inbox-empty').style.display = 'block';
+            document.getElementById('inbox-empty').innerHTML = '<p>' + esc(d.detail || d.error || 'Failed to load conversations') + '</p>';
+            return;
+        }
+        const convs = d.conversations || [];
+        if (convs.length === 0) {
+            document.getElementById('inbox-empty').style.display = 'block';
+            document.getElementById('inbox-empty').innerHTML = '<p>No DMs yet. Messages will appear here when users message your account.</p>';
+            return;
+        }
+        document.getElementById('inbox-content').style.display = 'block';
+        const list = document.getElementById('conversations-list');
+        const lastMsg = (m) => { const s = m || ''; return s.substring(0, 80) + (s.length > 80 ? '...' : ''); };
+        const sugg = (s) => s ? s.substring(0, 60) + (s.length > 60 ? '...' : '') : '';
+        list.innerHTML = convs.map(c => `
+            <div class="conv-item" data-user-id="${esc(c.user_id)}" data-username="${esc(c.username || '')}">
+                <div>
+                    <div class="conv-name">${esc(c.username || c.user_id)}</div>
+                    <div class="conv-msg">${esc(lastMsg(c.last_message))}</div>
+                    ${c.ai_reply_suggested ? `<div class="conv-suggestion">AI: ${esc(sugg(c.ai_reply_suggested))}</div>` : ''}
+                </div>
+            </div>
+        `).join('');
+        list.querySelectorAll('.conv-item').forEach(el => {
+            el.onclick = () => openConversation(el.dataset.userId, el.dataset.username);
+        });
+    } catch (e) {
+        document.getElementById('inbox-loading').style.display = 'none';
+        document.getElementById('inbox-empty').style.display = 'block';
+        document.getElementById('inbox-empty').innerHTML = '<p>' + esc('Error loading inbox. Please try again.') + '</p>';
+        console.error(e);
+    }
+}
+
+let currentUserId = null;
+let currentUsername = '';
+
+async function openConversation(userId, username) {
+    currentUserId = userId;
+    currentUsername = username;
+    const accountId = document.getElementById('inbox-account').value;
+    if (!accountId) return;
+    document.getElementById('conversation-detail').style.display = 'block';
+    document.getElementById('detail-username').textContent = username || userId || '';
+    const r = await api(`/ai-dm/inbox/${encodeURIComponent(userId)}/messages?account_id=${encodeURIComponent(accountId)}`);
+    const d = await r.json().catch(() => ({}));
+    const msgs = (r.ok ? d : {}).messages || [];
+    const thread = document.getElementById('messages-thread');
+    thread.innerHTML = msgs.map(m => `
+        <div class="msg-item">
+            <div class="msg-meta">${esc(m.timestamp ? new Date(m.timestamp).toLocaleString() : '')}</div>
+            ${esc(m.message || '')}
+        </div>
+    `).join('');
+    const listR = await api(`/ai-dm/inbox?account_id=${encodeURIComponent(accountId)}`);
+    const listD = await listR.json().catch(() => ({}));
+    const convs = (listR.ok ? listD : {}).conversations || [];
+    const c = convs.find(x => x.user_id === userId);
+    document.getElementById('reply-text').value = (c && c.ai_reply_suggested) ? c.ai_reply_suggested : '';
+}
+
+document.getElementById('close-detail').onclick = () => {
+    document.getElementById('conversation-detail').style.display = 'none';
+    currentUserId = null;
+};
+
+document.getElementById('suggest-reply-btn').onclick = async () => {
+    const accountId = document.getElementById('inbox-account').value;
+    if (!accountId || !currentUserId) return;
+    const btn = document.getElementById('suggest-reply-btn');
+    btn.disabled = true;
+    btn.textContent = 'Generating...';
+    try {
+        const r = await api(`/ai-dm/inbox/${encodeURIComponent(currentUserId)}/suggest-reply`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ account_id: accountId })
+        });
+        const d = await r.json().catch(() => ({}));
+        if (r.ok && d.suggested_reply) {
+            document.getElementById('reply-text').value = d.suggested_reply;
+        } else {
+            const err = typeof d.detail === 'string' ? d.detail : (Array.isArray(d.detail) && d.detail[0] ? d.detail[0].msg || String(d.detail[0]) : null) || d.error || 'Failed to generate';
+            alert(err);
+        }
+    } catch (e) {
+        alert(e.message || 'Failed to generate');
+    }
+    btn.disabled = false;
+    btn.textContent = 'Generate AI Reply';
+};
+
+document.getElementById('send-reply-btn').onclick = async () => {
+    const accountId = document.getElementById('inbox-account').value;
+    const reply = document.getElementById('reply-text').value.trim();
+    if (!accountId || !currentUserId || !reply) {
+        alert('Select account, open conversation, and enter reply');
+        return;
+    }
+    const btn = document.getElementById('send-reply-btn');
+    btn.disabled = true;
+    try {
+        const r = await api(`/ai-dm/inbox/${encodeURIComponent(currentUserId)}/send-reply`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ account_id: accountId, reply_text: reply, username: currentUsername })
+        });
+        const d = await r.json().catch(() => ({}));
+        if (r.ok && d.status === 'success') {
+            document.getElementById('reply-text').value = '';
+            document.getElementById('conversation-detail').style.display = 'none';
+            loadConversations();
+        } else {
+            const err = typeof d.detail === 'string' ? d.detail : (Array.isArray(d.detail) && d.detail[0] ? d.detail[0].msg || String(d.detail[0]) : null) || d.error || 'Send failed';
+            alert(err);
+        }
+    } catch (e) {
+        alert(e.message || 'Send failed');
+    }
+    btn.disabled = false;
+};
+
+document.getElementById('refresh-inbox').onclick = loadConversations;
+
+document.addEventListener('DOMContentLoaded', async () => {
+    await loadAccounts();
+    const accountId = document.getElementById('inbox-account').value;
+    if (accountId) loadConversations();
+});
+</script>
+{% endblock %}

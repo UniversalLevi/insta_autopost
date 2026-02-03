@@ -17,17 +17,40 @@
         </div>
     </div>
 
-    <!-- Webhook Configuration (matches Meta app setup) -->
+    <!-- Webhook Configuration (matches Meta app setup) - Rendered server-side, no spinner -->
     <div class="card">
         <h2>📡 Webhook Configuration</h2>
         <p class="text-sm text-muted" style="margin-bottom: 1rem;">Use these values in your Meta app. Callback URL must be the <strong>production URL</strong> below, not this page.</p>
-        <div id="webhook-config" class="loading">Loading webhook configuration...</div>
+        <div id="webhook-config">
+            <div class="status-item ok" style="margin-bottom: 1rem;">
+                <div class="status-label"><strong>Production URL (use this in Meta)</strong></div>
+                <div class="code-block-wrap" style="margin-top: 6px; display: flex; gap: 8px; align-items: flex-start;">
+                    <div class="code-block" style="flex: 1; word-break: break-all;" id="webhook-url">{{ (webhook_config or {}).get('production_url', 'https://veilforce.com/webhooks/instagram') }}</div>
+                    <button type="button" class="btn-copy" onclick="copyToClipboard('webhook-url', this)">Copy</button>
+                </div>
+                <div class="text-sm text-muted" style="margin-top: 4px;">In Meta app → Webhooks → Configure → Callback URL = this URL</div>
+            </div>
+            <div class="status-item ok" style="margin-bottom: 1rem;">
+                <div class="status-label"><strong>Verify Token (use this in Meta)</strong></div>
+                <div class="code-block-wrap" style="margin-top: 6px; display: flex; gap: 8px; align-items: flex-start;">
+                    <div class="code-block" style="flex: 1;" id="webhook-verify">{{ (webhook_config or {}).get('verify_token', 'my_test_token_for_instagram_verification') }}</div>
+                    <button type="button" class="btn-copy" onclick="copyToClipboard('webhook-verify', this)">Copy</button>
+                </div>
+                <div class="text-sm text-muted" style="margin-top: 4px;">In Meta app → Webhooks → Configure → Verify token = this value</div>
+            </div>
+            <div class="status-item warning" style="margin-top: 1rem; padding: 12px; background: #fef3c7; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                <strong>Important:</strong> Do NOT use <code>/api/webhooks/callback-url</code> as Callback URL in Meta. Use the Production URL above (<code>.../webhooks/instagram</code>). Set <code>BASE_URL</code> in your server environment for your production domain.
+            </div>
+        </div>
     </div>
 
     <!-- AI DM Status -->
     <div class="card">
         <h2>🤖 AI DM Auto-Reply Status</h2>
-        <div id="ai-dm-status" class="loading">Loading AI DM status...</div>
+        <div id="ai-dm-status" class="webhook-loading-state">
+            <span class="loading-spinner-inline"></span>
+            <span>Loading AI DM status...</span>
+        </div>
     </div>
 
     <!-- Test Webhook Event -->
@@ -200,6 +223,28 @@
     color: #6b7280;
 }
 
+.webhook-loading-state {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 24px;
+    color: #6b7280;
+}
+
+.loading-spinner-inline {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 2px solid #e5e7eb;
+    border-top-color: #6366f1;
+    border-radius: 50%;
+    animation: webhook-spin 0.8s linear infinite;
+}
+
+@keyframes webhook-spin {
+    to { transform: rotate(360deg); }
+}
+
 .error-message {
     background: #fee2e2;
     color: #991b1b;
@@ -241,51 +286,99 @@
     overflow-x: auto;
     margin: 8px 0;
 }
+
+.btn-copy {
+    padding: 8px 14px;
+    font-size: 13px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.btn-copy:hover {
+    background: var(--primary-dark);
+}
+
+.btn-copy.copied {
+    background: var(--success);
+}
 </style>
 
 <script>
 let refreshInterval = null;
 
+function copyToClipboard(elementId, btn) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    const text = el.textContent || '';
+    navigator.clipboard.writeText(text).then(() => {
+        const orig = btn.textContent;
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 2000);
+    }).catch(() => alert('Copy failed'));
+}
+
+function escapeHtml(str) {
+    if (str == null) return '';
+    const div = document.createElement('div');
+    div.textContent = String(str);
+    return div.innerHTML;
+}
+
 async function loadWebhookConfig() {
     const container = document.getElementById('webhook-config');
-    container.innerHTML = '<div class="loading">Loading webhook configuration...</div>';
-    
+    if (!container) return;
+    container.innerHTML = '<div class="webhook-loading-state"><span class="loading-spinner-inline"></span><span>Refreshing...</span></div>';
     try {
-        const response = await fetch('/api/webhooks/callback-url');
-        const data = await response.json();
-        
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+        const response = await fetch('/api/webhooks/callback-url', { credentials: 'include', signal: controller.signal });
+        clearTimeout(timeout);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(data.detail || data.message || 'HTTP ' + response.status);
+        }
         const prodUrl = data.production_url || data.meta_callback_url || 'https://veilforce.com/webhooks/instagram';
-        const html = `
-            <div class="status-item ok" style="margin-bottom: 1rem;">
-                <div class="status-label"><strong>Production URL (use this in Meta)</strong></div>
-                <div class="code-block" style="margin-top: 6px; word-break: break-all;">${prodUrl}</div>
-                <div class="text-sm text-muted" style="margin-top: 4px;">In Meta app → Callback URL = this URL</div>
-            </div>
-            <div class="status-item ok" style="margin-bottom: 1rem;">
-                <div class="status-label"><strong>Verify Token (use this in Meta)</strong></div>
-                <div class="code-block" style="margin-top: 6px;">${data.verify_token || 'Not set'}</div>
-                <div class="text-sm text-muted" style="margin-top: 4px;">In Meta app → Verify token = this value</div>
-            </div>
-            <div class="status-item warning" style="margin-top: 1rem; padding: 12px; background: #fef3c7; border-radius: 8px; border-left: 4px solid #f59e0b;">
-                <strong>Important:</strong> Do NOT use <code>/api/webhooks/callback-url</code> as Callback URL in Meta. Use the Production URL above (<code>.../webhooks/instagram</code>). On veilforce.com server set <code>BASE_URL=https://veilforce.com</code>.
-            </div>
-            ${data.callback_url && data.callback_url !== prodUrl ? `<div class="status-item" style="margin-top: 12px;"><div class="status-label">Current callback (dev)</div><div class="code-block">${data.callback_url}</div></div>` : ''}
-        `;
-        
+        const verifyToken = data.verify_token || 'Not set';
+        const html = '<div class="status-item ok" style="margin-bottom: 1rem;">' +
+            '<div class="status-label"><strong>Production URL (use this in Meta)</strong></div>' +
+            '<div class="code-block-wrap" style="margin-top: 6px; display: flex; gap: 8px; align-items: flex-start;">' +
+            '<div class="code-block" style="flex: 1; word-break: break-all;" id="webhook-url">' + escapeHtml(prodUrl) + '</div>' +
+            '<button type="button" class="btn-copy" onclick="copyToClipboard(\'webhook-url\', this)">Copy</button></div>' +
+            '<div class="text-sm text-muted" style="margin-top: 4px;">In Meta app → Webhooks → Configure → Callback URL = this URL</div></div>' +
+            '<div class="status-item ok" style="margin-bottom: 1rem;">' +
+            '<div class="status-label"><strong>Verify Token (use this in Meta)</strong></div>' +
+            '<div class="code-block-wrap" style="margin-top: 6px; display: flex; gap: 8px; align-items: flex-start;">' +
+            '<div class="code-block" style="flex: 1;" id="webhook-verify">' + escapeHtml(verifyToken) + '</div>' +
+            '<button type="button" class="btn-copy" onclick="copyToClipboard(\'webhook-verify\', this)">Copy</button></div>' +
+            '<div class="text-sm text-muted" style="margin-top: 4px;">In Meta app → Verify token = this value</div></div>' +
+            '<div class="status-item warning" style="margin-top: 1rem; padding: 12px; background: #fef3c7; border-radius: 8px; border-left: 4px solid #f59e0b;">' +
+            '<strong>Important:</strong> Do NOT use <code>/api/webhooks/callback-url</code> as Callback URL. Use the Production URL above. Set <code>BASE_URL</code> in your server environment.</div>';
         container.innerHTML = html;
     } catch (error) {
         console.error('Error loading webhook config:', error);
-        container.innerHTML = '<div class="error-message">Error loading webhook configuration: ' + error.message + '</div>';
+        container.innerHTML = '<div class="error-message">Error loading webhook configuration: ' + escapeHtml(error.message || 'Unknown error') + '</div>';
     }
 }
 
 async function loadAIDMStatus() {
     const container = document.getElementById('ai-dm-status');
-    container.innerHTML = '<div class="loading">Loading AI DM status...</div>';
-    
+    if (!container) return;
+    container.innerHTML = '<div class="webhook-loading-state"><span class="loading-spinner-inline"></span><span>Loading AI DM status...</span></div>';
     try {
-        const response = await fetch('/api/test/ai-dm-status');
-        const data = await response.json();
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+        const response = await fetch('/api/test/ai-dm-status', { credentials: 'include', signal: controller.signal });
+        clearTimeout(timeout);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(data.detail || data.error || 'HTTP ' + response.status);
+        }
         
         if (!data.openai_configured) {
             container.innerHTML = '<div class="error-message">⚠️ OpenAI API key not configured. Set OPENAI_API_KEY environment variable.</div>';
@@ -328,7 +421,7 @@ async function loadAIDMStatus() {
             ).join('');
     } catch (error) {
         console.error('Error loading AI DM status:', error);
-        container.innerHTML = '<div class="error-message">Error loading AI DM status: ' + error.message + '</div>';
+        container.innerHTML = '<div class="error-message">Error loading AI DM status: ' + (error.message || 'Unknown error') + '</div>';
     }
 }
 
@@ -387,7 +480,7 @@ async function testWebhook() {
 }
 
 document.getElementById('refresh-status').addEventListener('click', () => {
-    loadWebhookConfig();
+    loadWebhookConfig();  // Refresh overwrites server-rendered config
     loadAIDMStatus();
 });
 
@@ -398,13 +491,11 @@ document.getElementById('test-webhook').addEventListener('click', () => {
 
 document.getElementById('send-test-webhook').addEventListener('click', testWebhook);
 
-// Load on page load
-loadWebhookConfig();
+// Load on page load - webhook config is server-rendered, only load AI DM status
 loadAIDMStatus();
 
-// Auto-refresh every 30 seconds
+// Auto-refresh AI DM status every 30 seconds
 refreshInterval = setInterval(() => {
-    loadWebhookConfig();
     loadAIDMStatus();
 }, 30000);
 

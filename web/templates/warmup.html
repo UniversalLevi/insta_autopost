@@ -1,0 +1,351 @@
+{% extends "layout.html" %}
+
+{% block title %}5-Day Warm-Up - InstaForge{% endblock %}
+
+{% block page_title %}Instagram 5-Day Account Warm-Up{% endblock %}
+
+{% block content %}
+<div class="warmup-page">
+    <div class="page-header">
+        <p class="warmup-desc">Help old or risky accounts regain trust safely. Manual guidance + light automation.</p>
+        <div class="header-actions">
+            <button id="refresh-warmup" class="btn btn-primary">
+                <span class="icon">🔄</span> Refresh
+            </button>
+        </div>
+    </div>
+
+    <div id="warmup-loading" class="warmup-loading" style="display: flex;">
+        <span class="loading-spinner-inline"></span>
+        <span>Loading warm-up status...</span>
+    </div>
+
+    <div id="warmup-content" style="display: none;">
+        <div class="card warmup-account-select">
+            <label class="form-label">Select Account</label>
+            <select id="warmup-account" class="form-control">
+                <option value="">Loading...</option>
+            </select>
+        </div>
+
+        <div id="warmup-no-plan" class="card warmup-empty" style="display: none;">
+            <h3>No active warm-up</h3>
+            <p>Start a 5-day warm-up to safely restore account trust.</p>
+            <button id="start-warmup-btn" class="btn btn-primary">Start Warm-Up</button>
+        </div>
+
+        <div id="warmup-dashboard" class="warmup-dashboard" style="display: none;">
+            <div class="warmup-status-card">
+                <div class="status-row">
+                    <span class="status-label">Day</span>
+                    <span id="warmup-day" class="status-value">—</span>
+                    <span class="status-badge" id="warmup-status-badge">active</span>
+                </div>
+                <div class="progress-bar-wrap">
+                    <div class="progress-bar" id="warmup-progress"></div>
+                </div>
+                <div class="risk-row">
+                    <span class="risk-label">Risk Score</span>
+                    <span id="warmup-risk" class="risk-value risk-low">0</span>
+                </div>
+            </div>
+
+            <div class="card warmup-automation">
+                <h3>Automation</h3>
+                <p class="text-sm text-muted">Enable to auto-run like, comment, save from hashtag discovery. Requires Playwright and account password.</p>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="automation-enabled" />
+                        Enable automation
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Target hashtags (comma-separated)</label>
+                    <input type="text" id="automation-hashtags" class="form-control" placeholder="fitness, travel, photography" />
+                </div>
+                <div style="display: flex; gap: 12px; align-items: center;">
+                    <button id="save-automation-btn" class="btn btn-secondary">Save automation settings</button>
+                    <button id="run-automation-now-btn" class="btn btn-primary">Run automation now</button>
+                </div>
+            </div>
+
+            <div class="card warmup-tasks">
+                <h3>Today's Tasks</h3>
+                <div id="warmup-tasks-list" class="tasks-list"></div>
+                <div class="warmup-actions">
+                    <button id="complete-day-btn" class="btn btn-secondary">Complete Day & Continue</button>
+                    <button id="pause-warmup-btn" class="btn btn-secondary btn-warning">Pause Warm-Up</button>
+                </div>
+            </div>
+
+            <div id="warmup-warnings" class="card warmup-warnings" style="display: none;"></div>
+        </div>
+
+        <div id="warmup-paused" class="card warmup-paused" style="display: none;">
+            <h3>Warm-up paused</h3>
+            <p id="pause-reason">—</p>
+            <button id="resume-warmup-btn" class="btn btn-primary">Resume Warm-Up</button>
+        </div>
+
+        <div id="warmup-completed" class="card warmup-completed" style="display: none;">
+            <h3>✅ Warm-up completed</h3>
+            <p>Account is ready for normal automation.</p>
+        </div>
+    </div>
+
+    <div id="warmup-error" class="error-message" style="display: none;"></div>
+</div>
+
+<style>
+.warmup-page { padding: 20px; }
+.warmup-desc { color: #6b7280; margin-bottom: 16px; }
+.page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+.warmup-loading { display: flex; align-items: center; gap: 12px; padding: 24px; color: #6b7280; }
+.loading-spinner-inline { display: inline-block; width: 20px; height: 20px; border: 2px solid #e5e7eb; border-top-color: #6366f1; border-radius: 50%; animation: warmup-spin 0.8s linear infinite; }
+@keyframes warmup-spin { to { transform: rotate(360deg); } }
+
+.warmup-account-select { margin-bottom: 20px; max-width: 400px; }
+.warmup-empty, .warmup-paused, .warmup-completed { text-align: center; padding: 40px; }
+.warmup-dashboard { display: grid; gap: 20px; }
+.warmup-status-card { background: #f9fafb; border-radius: 8px; padding: 20px; border-left: 4px solid #10b981; }
+.status-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.status-label { font-weight: 600; color: #374151; }
+.status-value { font-size: 18px; font-weight: 700; color: #6366f1; }
+.status-badge { padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+.status-badge.active { background: #d1fae5; color: #065f46; }
+.status-badge.paused { background: #fef3c7; color: #92400e; }
+.status-badge.completed { background: #dbeafe; color: #1e40af; }
+.progress-bar-wrap { height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden; margin: 12px 0; }
+.progress-bar { height: 100%; background: linear-gradient(90deg, #10b981, #6366f1); transition: width 0.3s; }
+.risk-row { margin-top: 12px; font-size: 14px; }
+.risk-value.risk-low { color: #10b981; }
+.risk-value.risk-mid { color: #f59e0b; }
+.risk-value.risk-high { color: #ef4444; }
+
+.warmup-tasks h3 { margin: 0 0 16px 0; font-size: 18px; }
+.tasks-list { display: grid; gap: 10px; margin-bottom: 20px; }
+.task-item { display: flex; align-items: center; gap: 12px; padding: 12px; background: #f9fafb; border-radius: 6px; border-left: 3px solid #e5e7eb; }
+.task-item.done { border-left-color: #10b981; background: #f0fdf4; }
+.task-item .task-check { width: 20px; height: 20px; border-radius: 4px; border: 2px solid #d1d5db; flex-shrink: 0; }
+.task-item.done .task-check { background: #10b981; border-color: #10b981; }
+.task-item .task-label { flex: 1; }
+.task-item .task-count { color: #6b7280; font-size: 13px; }
+.warmup-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.btn-warning { border-color: #f59e0b; color: #92400e; }
+.warmup-warnings { background: #fef3c7; border-left: 4px solid #f59e0b; }
+.error-message { background: #fee2e2; color: #991b1b; padding: 12px; border-radius: 6px; margin-top: 20px; }
+.warmup-automation { margin-bottom: 20px; }
+.checkbox-label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.checkbox-label input { width: auto; }
+</style>
+
+<script>
+const api = (path, opts = {}) => fetch('/api/warmup' + path, { credentials: 'include', ...opts });
+
+async function loadAccounts() {
+    try {
+        const r = await fetch('/api/config/accounts', { credentials: 'include' });
+        const d = await r.json();
+        const sel = document.getElementById('warmup-account');
+        sel.innerHTML = '<option value="">Select account...</option>' + (d.accounts || []).map(a =>
+            `<option value="${a.account_id}">${a.username || a.account_id}</option>`
+        ).join('');
+        sel.addEventListener('change', loadWarmupStatus);
+        return d.accounts || [];
+    } catch (e) {
+        console.error(e);
+        return [];
+    }
+}
+
+async function loadWarmupStatus() {
+    const accountId = document.getElementById('warmup-account').value;
+    if (!accountId) {
+        document.getElementById('warmup-no-plan').style.display = 'block';
+        document.getElementById('warmup-dashboard').style.display = 'none';
+        document.getElementById('warmup-paused').style.display = 'none';
+        document.getElementById('warmup-completed').style.display = 'none';
+        return;
+    }
+    document.getElementById('warmup-loading').style.display = 'flex';
+    document.getElementById('warmup-error').style.display = 'none';
+    try {
+        const r = await api('/status?account_id=' + encodeURIComponent(accountId));
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.detail || 'Failed to load status');
+        renderStatus(d, accountId);
+    } catch (e) {
+        document.getElementById('warmup-error').textContent = e.message || 'Error';
+        document.getElementById('warmup-error').style.display = 'block';
+    } finally {
+        document.getElementById('warmup-loading').style.display = 'none';
+    }
+}
+
+function renderStatus(data, accountId) {
+    accountId = accountId || document.getElementById('warmup-account').value;
+    const hasPlan = data.plan != null;
+    const plan = data.plan || {};
+    const status = plan.status || 'none';
+
+    document.getElementById('warmup-no-plan').style.display = (!hasPlan || status === 'none') ? 'block' : 'none';
+    document.getElementById('warmup-dashboard').style.display = (hasPlan && status === 'active') ? 'block' : 'none';
+    document.getElementById('warmup-paused').style.display = (hasPlan && status === 'paused') ? 'block' : 'none';
+    document.getElementById('warmup-completed').style.display = (hasPlan && status === 'completed') ? 'block' : 'none';
+
+    if (hasPlan && status === 'paused') {
+        document.getElementById('pause-reason').textContent = plan.notes || 'Paused by user';
+    }
+
+    if (hasPlan && status === 'active') {
+        const day = plan.current_day || 1;
+        document.getElementById('warmup-day').textContent = day + ' / 5';
+        document.getElementById('warmup-progress').style.width = (day / 5 * 100) + '%';
+        const risk = plan.risk_score || 0;
+        const riskEl = document.getElementById('warmup-risk');
+        riskEl.textContent = risk;
+        riskEl.className = 'risk-value ' + (risk >= 80 ? 'risk-high' : risk >= 50 ? 'risk-mid' : 'risk-low');
+        document.getElementById('warmup-status-badge').textContent = 'active';
+        document.getElementById('warmup-status-badge').className = 'status-badge active';
+
+        loadAutomationConfig(accountId);
+
+        const tasks = (data.tasks || []).map(t => `
+            <div class="task-item ${t.completed ? 'done' : ''}" data-task-id="${t.id}">
+                <div class="task-check"></div>
+                <div class="task-label">${t.label}</div>
+                <div class="task-count">${t.done_count || 0} / ${t.target || 1}</div>
+            </div>
+        `).join('');
+        document.getElementById('warmup-tasks-list').innerHTML = tasks || '<p class="text-muted">No tasks for today.</p>';
+    }
+}
+
+document.getElementById('start-warmup-btn').addEventListener('click', async () => {
+    const accountId = document.getElementById('warmup-account').value;
+    if (!accountId) { alert('Select an account'); return; }
+    try {
+        const r = await api('/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ account_id: accountId }) });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.detail || 'Failed');
+        loadWarmupStatus();
+    } catch (e) {
+        alert(e.message || 'Failed to start warm-up');
+    }
+});
+
+document.getElementById('complete-day-btn').addEventListener('click', async () => {
+    const accountId = document.getElementById('warmup-account').value;
+    if (!accountId) return;
+    if (!confirm('Mark today as complete and advance to next day?')) return;
+    try {
+        const r = await api('/complete-day', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ account_id: accountId }) });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.detail || 'Failed');
+        loadWarmupStatus();
+    } catch (e) {
+        alert(e.message || 'Failed');
+    }
+});
+
+document.getElementById('pause-warmup-btn').addEventListener('click', async () => {
+    const accountId = document.getElementById('warmup-account').value;
+    if (!accountId) return;
+    const reason = prompt('Reason for pause (optional):') || 'Paused by user';
+    try {
+        const r = await api('/pause', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ account_id: accountId, reason }) });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.detail || 'Failed');
+        loadWarmupStatus();
+    } catch (e) {
+        alert(e.message || 'Failed');
+    }
+});
+
+document.getElementById('resume-warmup-btn').addEventListener('click', async () => {
+    const accountId = document.getElementById('warmup-account').value;
+    if (!accountId) return;
+    try {
+        const r = await api('/resume', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ account_id: accountId }) });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.detail || 'Failed');
+        loadWarmupStatus();
+    } catch (e) {
+        alert(e.message || 'Failed');
+    }
+});
+
+async function loadAutomationConfig(accountId) {
+    if (!accountId) return;
+    try {
+        const r = await fetch('/api/warmup/automation-config?account_id=' + encodeURIComponent(accountId), { credentials: 'include' });
+        const cfg = await r.json();
+        document.getElementById('automation-enabled').checked = cfg.automation_enabled || false;
+        document.getElementById('automation-hashtags').value = (cfg.target_hashtags || []).join(', ');
+    } catch (e) {
+        console.error('Failed to load automation config', e);
+    }
+}
+
+document.getElementById('run-automation-now-btn').addEventListener('click', async () => {
+    const accountId = document.getElementById('warmup-account').value;
+    if (!accountId) { alert('Select an account'); return; }
+    const btn = document.getElementById('run-automation-now-btn');
+    btn.disabled = true;
+    btn.textContent = 'Running...';
+    try {
+        const r = await fetch('/api/warmup/run-automation', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ account_id: accountId }),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.detail || 'Failed');
+        alert('Automation ran. Actions: ' + (d.result?.actions || 0));
+        loadWarmupStatus();
+    } catch (e) {
+        alert(e.message || 'Failed');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Run automation now';
+    }
+});
+
+document.getElementById('save-automation-btn').addEventListener('click', async () => {
+    const accountId = document.getElementById('warmup-account').value;
+    if (!accountId) { alert('Select an account'); return; }
+    const hashtags = document.getElementById('automation-hashtags').value.split(',').map(s => s.trim()).filter(Boolean);
+    if (!hashtags.length) hashtags.push('explore');
+    try {
+        const r = await fetch('/api/warmup/automation-config', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+                account_id: accountId,
+                automation_enabled: document.getElementById('automation-enabled').checked,
+                target_hashtags: hashtags,
+            }),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.detail || 'Failed');
+        alert('Automation settings saved');
+    } catch (e) {
+        alert(e.message || 'Failed to save');
+    }
+});
+
+document.getElementById('refresh-warmup').addEventListener('click', () => {
+    loadAccounts().then(() => loadWarmupStatus());
+});
+
+document.addEventListener('DOMContentLoaded', async () => {
+    document.getElementById('warmup-content').style.display = 'block';
+    await loadAccounts();
+    const accountId = document.getElementById('warmup-account').value;
+    if (accountId) loadWarmupStatus();
+    else document.getElementById('warmup-loading').style.display = 'none';
+});
+</script>
+{% endblock %}

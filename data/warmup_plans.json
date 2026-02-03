@@ -1,0 +1,33 @@
+{
+  "plans": [
+    {
+      "account_id": "17841480102452551",
+      "instagram_id": "17841480102452551",
+      "start_date": "2026-02-02",
+      "current_day": 1,
+      "status": "paused",
+      "last_action_time": null,
+      "risk_score": 0,
+      "daily_actions_completed": {},
+      "completed_tasks": [],
+      "notes": "\nPaused: Paused by user",
+      "created_at": "2026-02-02T20:23:39.183712",
+      "updated_at": "2026-02-02T20:24:20.277187"
+    },
+    {
+      "account_id": "17841444586383008",
+      "instagram_id": "17841444586383008",
+      "start_date": "2026-02-02",
+      "current_day": 1,
+      "status": "paused",
+      "last_action_time": null,
+      "risk_score": 0,
+      "daily_actions_completed": {},
+      "completed_tasks": [],
+      "notes": "\nPaused: Paused by user",
+      "created_at": "2026-02-02T20:40:09.040315",
+      "updated_at": "2026-02-02T20:40:35.053563"
+    }
+  ],
+  "updated_at": "2026-02-02T20:40:35.053563"
+}

@@ -316,19 +316,27 @@ class CommentToDMService:
     ) -> bool:
         """
         When DM fails due to 24h window (code 10), reply to the comment so the user
-        still receives a response. Uses dm_message (AI or template) when provided;
-        otherwise uses link-based fallback text.
+        still receives a response. Always mentions the user (@username) so they get
+        notified. Includes public link in comment when DM cannot be sent.
         """
         msg = (dm_message or "").strip()
+        link = (link_to_send or "").strip()
+        is_public_url = link and (link.startswith("http://") or link.startswith("https://"))
+        mention = f"@{comment_username}" if comment_username else ""
+
         if not msg:
-            link = (link_to_send or "").strip()
-            is_public_url = link and (link.startswith("http://") or link.startswith("https://"))
-            # Mention user with @username so they get notified and see the link
-            mention = f"@{comment_username}" if comment_username else "there"
+            # Build fallback from scratch
             if is_public_url:
                 msg = f"Hey {mention}! 👋 Instagram doesn't allow DMs unless you've messaged us first. Here's your link: {link}"
             else:
                 msg = f"Hey {mention}! 👋 Message us first (DM) so we can send you the link – Instagram restricts automated DMs."
+        else:
+            # Ensure @mention at start so user gets notified (comment reply doesn't notify if no @)
+            if comment_username and f"@{comment_username}" not in msg:
+                msg = f"@{comment_username} {msg}"
+            # If we have a public link and it's not in the message, append it so they still get it
+            if is_public_url and link not in msg:
+                msg = f"{msg} Here's your link: {link}"
         try:
             # Instagram Graph API: POST replies with message in request body (data)
             client._make_request("POST", f"{comment_id}/replies", data={"message": msg})
@@ -868,21 +876,40 @@ class CommentToDMService:
                     trigger_type=result["trigger_type"],
                 )
                 
-                # After successful DM, also reply to the comment with AI-generated text (mentioning the user)
-                if ai_enabled and comment_username:
-                    # Pass dm_message if it's AI-generated (when ai_message was used), otherwise None to generate new
-                    ai_msg_for_comment = dm_message if (ai_message and ai_message.strip() != FALLBACK_REPLY and dm_message == ai_message.strip()) else None
-                    self._reply_to_comment_with_ai(
-                        client=client,
-                        account_id=account_id,
-                        comment_id=comment_id,
-                        comment_username=comment_username,
-                        ai_message=ai_msg_for_comment,
-                        comment_text=comment_text or "",
-                        post_context=media_caption or "",
-                        account_username=account_username,
-                        link=link_to_send,
-                    )
+                # After successful DM, reply to the comment so user gets mention back and knows to check DMs
+                if comment_username:
+                    if ai_enabled:
+                        # Pass dm_message if it's AI-generated (when ai_message was used), otherwise None to generate new
+                        ai_msg_for_comment = dm_message if (ai_message and ai_message.strip() != FALLBACK_REPLY and dm_message == ai_message.strip()) else None
+                        self._reply_to_comment_with_ai(
+                            client=client,
+                            account_id=account_id,
+                            comment_id=comment_id,
+                            comment_username=comment_username,
+                            ai_message=ai_msg_for_comment,
+                            comment_text=comment_text or "",
+                            post_context=media_caption or "",
+                            account_username=account_username,
+                            link=link_to_send,
+                        )
+                    else:
+                        # AI disabled: still mention back so they get notified, tell them link is in DMs
+                        mention_reply = f"@{comment_username} Thanks for commenting! Check your DMs for the link. 💙"
+                        try:
+                            client._make_request("POST", f"{comment_id}/replies", data={"message": mention_reply})
+                            logger.info(
+                                "Comment reply posted (mention back after DM success)",
+                                account_id=account_id,
+                                comment_id=comment_id,
+                                mentioned_user=comment_username,
+                            )
+                        except Exception as e:
+                            logger.warning(
+                                "Failed to post mention-back comment reply",
+                                account_id=account_id,
+                                comment_id=comment_id,
+                                error=str(e),
+                            )
             elif dm_result.get("error_code") == 10:
                 # Instagram 24h window: user must message you first. Commenting does NOT open DMs.
                 # Fallback: reply to comment with dm_message (AI/template) or link-based text.
