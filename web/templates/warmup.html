@@ -287,6 +287,21 @@ async function loadAutomationConfig(accountId) {
     }
 }
 
+async function runAutomationWithAutoEnable(accountId) {
+    const r = await fetch('/api/warmup/run-automation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ account_id: accountId }),
+    });
+    const d = await r.json();
+    if (!r.ok) {
+        const detail = typeof d.detail === 'string' ? d.detail : (Array.isArray(d.detail) ? d.detail.map(x => x.msg || x).join(', ') : JSON.stringify(d.detail || 'Failed'));
+        throw new Error(detail);
+    }
+    return d;
+}
+
 document.getElementById('run-automation-now-btn').addEventListener('click', async () => {
     const accountId = document.getElementById('warmup-account').value;
     if (!accountId) { alert('Select an account'); return; }
@@ -294,19 +309,26 @@ document.getElementById('run-automation-now-btn').addEventListener('click', asyn
     btn.disabled = true;
     btn.textContent = 'Running...';
     try {
-        const r = await fetch('/api/warmup/run-automation', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ account_id: accountId }),
-        });
-        const d = await r.json();
-        if (!r.ok) {
-            const detail = typeof d.detail === 'string' ? d.detail : (Array.isArray(d.detail) ? d.detail.map(x => x.msg || x).join(', ') : JSON.stringify(d.detail || 'Failed'));
-            throw new Error(detail);
+        let d = await runAutomationWithAutoEnable(accountId);
+        let msg = d.result?.message || '';
+        if (msg.includes('Automation is disabled') && confirm('Automation is disabled. Enable it and run now?')) {
+            const hashtags = document.getElementById('automation-hashtags').value.split(',').map(s => s.trim()).filter(Boolean);
+            if (!hashtags.length) hashtags.push('explore');
+            await fetch('/api/warmup/automation-config', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({
+                    account_id: accountId,
+                    automation_enabled: true,
+                    target_hashtags: hashtags,
+                }),
+            });
+            document.getElementById('automation-enabled').checked = true;
+            d = await runAutomationWithAutoEnable(accountId);
+            msg = d.result?.message || '';
         }
         const actions = d.result?.actions ?? 0;
-        let msg = d.result?.message;
         if (actions === 0 && !(msg && String(msg).trim())) {
             msg = 'No reason reported. Ensure the app was restarted after the latest update and try again. Check server logs if it persists.';
         }
