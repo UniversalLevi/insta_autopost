@@ -5,13 +5,14 @@
 
 {% block content %}
 <div class="inbox-container">
-    <p class="text-muted" style="margin-bottom: 1rem;">View users who messaged you, their messages, and AI-generated replies. Approve and send manually or enable auto-send in AI settings.</p>
-
-    <div class="card" style="margin-bottom: 1.5rem;">
-        <label class="form-label">Account</label>
-        <select id="inbox-account" class="form-control" style="max-width: 300px;">
-            <option value="">Loading...</option>
-        </select>
+    <div class="inbox-top-bar">
+        <p class="text-muted inbox-desc">View users who messaged you, their messages, and AI-generated replies. Approve and send manually or enable auto-send in AI settings.</p>
+        <div class="inbox-account-wrap">
+            <label class="form-label">Account</label>
+            <select id="inbox-account" class="form-control inbox-account-select">
+                <option value="">Loading...</option>
+            </select>
+        </div>
     </div>
 
     <div id="inbox-loading" class="loading-overlay" style="display: none;">
@@ -19,34 +20,51 @@
         <p>Loading conversations...</p>
     </div>
 
-    <div id="inbox-empty" class="card" style="display: none; text-align: center; padding: 2rem;">
-        <p>No DMs yet. Messages will appear here when users message your account.</p>
+    <div id="inbox-empty" class="inbox-empty-card card" style="display: none;">
+        <div class="inbox-empty-state">
+            <p class="inbox-empty-title">No DMs yet</p>
+            <p class="text-muted">DMs appear here when users message you via Instagram. Ensure your webhook is connected in Config so new messages are received.</p>
+        </div>
     </div>
 
-    <div id="inbox-content" style="display: none;">
-        <div class="card">
-            <div class="card-header">
-                <h3>Conversations</h3>
+    <div id="inbox-content" class="inbox-card card" style="display: none;">
+        <div class="inbox-card-header">
+            <h3 class="inbox-card-title">Conversations</h3>
+            <div class="inbox-header-actions">
+                <span id="last-refreshed" class="inbox-last-refreshed text-muted"></span>
+                <span id="next-refresh" class="inbox-next-refresh text-muted"></span>
+                <label class="auto-refresh-label">
+                    <input type="checkbox" id="auto-refresh-inbox" title="Refresh list every 15 seconds" checked>
+                    <span>Auto-refresh (15s)</span>
+                </label>
                 <button id="refresh-inbox" class="btn btn-secondary">Refresh</button>
             </div>
-            <div class="card-body">
+        </div>
+        <div class="inbox-panels">
+            <div class="inbox-panel inbox-list-panel">
                 <div id="conversations-list" class="conversations-list"></div>
             </div>
-        </div>
-
-        <div id="conversation-detail" class="card" style="display: none; margin-top: 1.5rem;">
-            <div class="card-header">
-                <h3 id="detail-username">—</h3>
-                <button id="close-detail" class="btn btn-secondary">Close</button>
-            </div>
-            <div class="card-body">
-                <div id="messages-thread" class="messages-thread"></div>
-                <div class="inbox-reply-section">
-                    <label class="form-label">AI Suggested Reply</label>
-                    <textarea id="reply-text" class="form-control" rows="3" placeholder="Click 'Generate AI Reply' or edit manually"></textarea>
-                    <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
-                        <button id="suggest-reply-btn" class="btn btn-secondary">Generate AI Reply</button>
-                        <button id="send-reply-btn" class="btn btn-primary">Send Reply</button>
+            <div class="inbox-panel inbox-detail-panel">
+                <div id="inbox-detail-empty" class="inbox-detail-empty">
+                    <p class="inbox-detail-empty-text">Select a conversation</p>
+                    <p class="text-muted" style="font-size: 0.875rem; margin-top: 0.25rem;">Choose one from the list to view messages and reply.</p>
+                </div>
+                <div id="conversation-detail" class="conversation-detail-wrap" style="display: none;">
+                    <div class="conversation-detail-header">
+                        <div class="detail-user-info">
+                            <h3 id="detail-username">—</h3>
+                            <div id="detail-user-id" class="conv-user-id"></div>
+                        </div>
+                        <button id="close-detail" class="btn btn-secondary">Close</button>
+                    </div>
+                    <div id="messages-thread" class="messages-thread"></div>
+                    <div class="inbox-reply-section">
+                        <label class="form-label">AI Suggested Reply</label>
+                        <textarea id="reply-text" class="form-control" rows="3" placeholder="Click 'Generate AI Reply' or edit manually"></textarea>
+                        <div class="inbox-reply-buttons">
+                            <button id="suggest-reply-btn" class="btn btn-secondary">Generate AI Reply</button>
+                            <button id="send-reply-btn" class="btn btn-primary">Send Reply</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -55,17 +73,57 @@
 </div>
 
 <style>
-.conversations-list { display: grid; gap: 0.75rem; }
-.conv-item { display: flex; justify-content: space-between; align-items: flex-start; padding: 1rem; background: #f9fafb; border-radius: 8px; border-left: 4px solid #6366f1; cursor: pointer; }
-.conv-item:hover { background: #f3f4f6; }
-.conv-item .conv-name { font-weight: 600; color: #111827; }
-.conv-item .conv-msg { font-size: 0.875rem; color: #6b7280; margin-top: 0.25rem; }
-.conv-item .conv-suggestion { font-size: 0.8rem; color: #059669; margin-top: 0.5rem; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.messages-thread { max-height: 300px; overflow-y: auto; margin-bottom: 1rem; padding: 0.5rem; background: #f9fafb; border-radius: 6px; }
-.msg-item { padding: 0.5rem; margin-bottom: 0.5rem; background: white; border-radius: 4px; font-size: 0.9rem; }
-.msg-item .msg-meta { font-size: 0.75rem; color: #9ca3af; }
-.inbox-reply-section { margin-top: 1rem; }
-.card-header { display: flex; justify-content: space-between; align-items: center; }
+.inbox-container { max-width: 100%; }
+.inbox-top-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 1rem; margin-bottom: 1rem; }
+.inbox-desc { flex: 1; min-width: 200px; margin: 0; }
+.inbox-account-wrap { min-width: 200px; }
+.inbox-account-select { max-width: 280px; }
+.inbox-empty-card { text-align: center; padding: 2.5rem; }
+.inbox-empty-state { max-width: 420px; margin: 0 auto; }
+.inbox-empty-title { font-weight: 600; color: var(--text-main); margin-bottom: 0.5rem; }
+.inbox-card { padding: 0; overflow: hidden; border: 1px solid var(--border); box-shadow: var(--shadow-md); }
+.inbox-card-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); background: var(--bg-card); }
+.inbox-card-title { margin: 0; font-size: 1.125rem; font-weight: 600; color: var(--text-main); }
+.inbox-header-actions { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.inbox-last-refreshed { font-size: 0.8125rem; }
+.inbox-next-refresh { font-size: 0.8125rem; min-width: 5rem; }
+.auto-refresh-label { display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; color: var(--text-muted); cursor: pointer; }
+.auto-refresh-label input { cursor: pointer; }
+.inbox-panels { display: grid; grid-template-columns: minmax(280px, 320px) 1fr; min-height: 420px; }
+.inbox-panel { border-right: 1px solid var(--border); overflow: hidden; display: flex; flex-direction: column; }
+.inbox-panel:last-child { border-right: none; }
+.inbox-list-panel { background: var(--bg-main); }
+.inbox-detail-panel { background: var(--bg-card); }
+.conversations-list { overflow-y: auto; flex: 1; padding: 0.5rem; }
+.conv-item { display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.875rem 1rem; border-radius: var(--radius); cursor: pointer; transition: background 0.15s ease; border-left: 3px solid transparent; }
+.conv-item:hover { background: var(--bg-hover); }
+.conv-item.active { background: rgba(99, 102, 241, 0.08); border-left-color: var(--primary); }
+.conv-item .conv-avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--border); flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 1.125rem; }
+.conv-item .conv-body { flex: 1; min-width: 0; }
+.conv-item .conv-username { font-weight: 600; color: var(--text-main); font-size: 0.9375rem; }
+.conv-item .conv-user-id { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.15rem; }
+.conv-item .conv-msg { font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.35rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conv-item .conv-meta { font-size: 0.75rem; color: var(--text-light); margin-top: 0.25rem; }
+.conv-item .conv-suggestion { font-size: 0.75rem; color: var(--success); margin-top: 0.35rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inbox-detail-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; text-align: center; }
+.inbox-detail-empty-text { font-weight: 600; color: var(--text-main); }
+.conversation-detail-wrap { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 1rem; }
+.conversation-detail-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; flex-shrink: 0; }
+.detail-user-info { min-width: 0; }
+.detail-user-info h3 { margin: 0; font-size: 1.0625rem; font-weight: 600; color: var(--text-main); }
+.detail-user-info .conv-user-id { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem; }
+.messages-thread { flex: 1; min-height: 180px; max-height: 320px; overflow-y: auto; padding: 0.5rem 0; margin-bottom: 1rem; }
+.msg-item { padding: 0.6rem 0.85rem; margin-bottom: 0.5rem; border-radius: var(--radius); font-size: 0.9rem; max-width: 85%; }
+.msg-item.received { background: var(--bg-hover); color: var(--text-main); align-self: flex-start; border-bottom-left-radius: 4px; }
+.msg-item.sent { background: var(--primary); color: white; align-self: flex-end; margin-left: auto; border-bottom-right-radius: 4px; }
+.msg-item .msg-meta { font-size: 0.7rem; opacity: 0.85; margin-bottom: 0.25rem; }
+.inbox-reply-section { flex-shrink: 0; margin-top: 0.5rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+.inbox-reply-buttons { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+@media (max-width: 768px) {
+    .inbox-panels { grid-template-columns: 1fr; }
+    .inbox-panel { border-right: none; border-bottom: 1px solid var(--border); }
+    .inbox-list-panel { min-height: 200px; max-height: 280px; }
+}
 </style>
 
 <script>
@@ -76,6 +134,17 @@ function esc(s) {
     const div = document.createElement('div');
     div.textContent = String(s);
     return div.innerHTML;
+}
+
+function timeAgo(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const sec = Math.floor((Date.now() - d) / 1000);
+    if (sec < 60) return 'just now';
+    if (sec < 3600) return Math.floor(sec / 60) + 'm ago';
+    if (sec < 86400) return Math.floor(sec / 3600) + 'h ago';
+    if (sec < 604800) return Math.floor(sec / 86400) + 'd ago';
+    return d.toLocaleDateString();
 }
 
 async function loadAccounts() {
@@ -100,6 +169,40 @@ async function loadAccounts() {
     }
 }
 
+function updateLastRefreshed() {
+    const el = document.getElementById('last-refreshed');
+    if (el) el.textContent = 'Last refreshed: ' + new Date().toLocaleTimeString();
+}
+
+let countdownSecs = 0;
+let countdownInterval = null;
+
+function startCountdown() {
+    countdownSecs = 15;
+    const el = document.getElementById('next-refresh');
+    if (!el) return;
+    if (countdownInterval) clearInterval(countdownInterval);
+    function tick() {
+        if (countdownSecs <= 0) {
+            el.textContent = '';
+            return;
+        }
+        el.textContent = 'Next in ' + countdownSecs + 's';
+        countdownSecs--;
+    }
+    tick();
+    countdownInterval = setInterval(tick, 1000);
+}
+
+function stopCountdown() {
+    if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+    }
+    const el = document.getElementById('next-refresh');
+    if (el) el.textContent = '';
+}
+
 async function loadConversations() {
     const accountId = document.getElementById('inbox-account').value;
     if (!accountId) return;
@@ -112,24 +215,32 @@ async function loadConversations() {
         document.getElementById('inbox-loading').style.display = 'none';
         if (!r.ok) {
             document.getElementById('inbox-empty').style.display = 'block';
-            document.getElementById('inbox-empty').innerHTML = '<p>' + esc(d.detail || d.error || 'Failed to load conversations') + '</p>';
+            document.getElementById('inbox-empty').querySelector('.inbox-empty-state').innerHTML =
+                '<p class="inbox-empty-title">Could not load conversations</p><p class="text-muted">' + esc(d.detail || d.error || 'Please try again.') + '</p>';
             return;
         }
         const convs = d.conversations || [];
         if (convs.length === 0) {
             document.getElementById('inbox-empty').style.display = 'block';
-            document.getElementById('inbox-empty').innerHTML = '<p>No DMs yet. Messages will appear here when users message your account.</p>';
+            document.getElementById('inbox-empty').querySelector('.inbox-empty-state').innerHTML =
+                '<p class="inbox-empty-title">No DMs yet</p><p class="text-muted">DMs appear here when users message you via Instagram. Ensure your webhook is connected in Config so new messages are received.</p>';
             return;
         }
         document.getElementById('inbox-content').style.display = 'block';
+        updateLastRefreshed();
+        startCountdown();
         const list = document.getElementById('conversations-list');
         const lastMsg = (m) => { const s = m || ''; return s.substring(0, 80) + (s.length > 80 ? '...' : ''); };
         const sugg = (s) => s ? s.substring(0, 60) + (s.length > 60 ? '...' : '') : '';
+        const uidShort = (id) => id ? (String(id).length > 12 ? String(id).slice(0, 10) + '…' : id) : '';
         list.innerHTML = convs.map(c => `
             <div class="conv-item" data-user-id="${esc(c.user_id)}" data-username="${esc(c.username || '')}">
-                <div>
-                    <div class="conv-name">${esc(c.username || c.user_id)}</div>
+                <div class="conv-avatar">👤</div>
+                <div class="conv-body">
+                    <div class="conv-username">${esc(c.username || 'User')}</div>
+                    <div class="conv-user-id">ID: ${esc(uidShort(c.user_id))}</div>
                     <div class="conv-msg">${esc(lastMsg(c.last_message))}</div>
+                    <div class="conv-meta">${esc(timeAgo(c.last_timestamp))}</div>
                     ${c.ai_reply_suggested ? `<div class="conv-suggestion">AI: ${esc(sugg(c.ai_reply_suggested))}</div>` : ''}
                 </div>
             </div>
@@ -137,10 +248,19 @@ async function loadConversations() {
         list.querySelectorAll('.conv-item').forEach(el => {
             el.onclick = () => openConversation(el.dataset.userId, el.dataset.username);
         });
+        if (!currentUserId) {
+            document.getElementById('inbox-detail-empty').style.display = 'flex';
+            document.getElementById('conversation-detail').style.display = 'none';
+        } else {
+            document.querySelectorAll('.conv-item').forEach(el => {
+                el.classList.toggle('active', String(el.dataset.userId) === String(currentUserId));
+            });
+        }
     } catch (e) {
         document.getElementById('inbox-loading').style.display = 'none';
         document.getElementById('inbox-empty').style.display = 'block';
-        document.getElementById('inbox-empty').innerHTML = '<p>' + esc('Error loading inbox. Please try again.') + '</p>';
+        document.getElementById('inbox-empty').querySelector('.inbox-empty-state').innerHTML =
+            '<p class="inbox-empty-title">Error loading inbox</p><p class="text-muted">Please try again.</p>';
         console.error(e);
     }
 }
@@ -150,31 +270,41 @@ let currentUsername = '';
 
 async function openConversation(userId, username) {
     currentUserId = userId;
-    currentUsername = username;
+    currentUsername = username || '';
     const accountId = document.getElementById('inbox-account').value;
     if (!accountId) return;
-    document.getElementById('conversation-detail').style.display = 'block';
-    document.getElementById('detail-username').textContent = username || userId || '';
+    document.getElementById('inbox-detail-empty').style.display = 'none';
+    document.getElementById('conversation-detail').style.display = 'flex';
+    document.getElementById('detail-username').textContent = username ? ('👤 ' + username) : ('User ID: ' + (userId || ''));
+    document.getElementById('detail-user-id').textContent = userId ? 'ID: ' + userId : '';
+    document.querySelectorAll('.conv-item').forEach(el => {
+        el.classList.toggle('active', String(el.dataset.userId) === String(userId));
+    });
     const r = await api(`/ai-dm/inbox/${encodeURIComponent(userId)}/messages?account_id=${encodeURIComponent(accountId)}`);
     const d = await r.json().catch(() => ({}));
     const msgs = (r.ok ? d : {}).messages || [];
     const thread = document.getElementById('messages-thread');
-    thread.innerHTML = msgs.map(m => `
-        <div class="msg-item">
+    thread.innerHTML = msgs.map(m => {
+        const isSent = (m.status || '').toLowerCase() === 'sent';
+        return `
+        <div class="msg-item ${isSent ? 'sent' : 'received'}">
             <div class="msg-meta">${esc(m.timestamp ? new Date(m.timestamp).toLocaleString() : '')}</div>
             ${esc(m.message || '')}
         </div>
-    `).join('');
+    `;
+    }).join('');
     const listR = await api(`/ai-dm/inbox?account_id=${encodeURIComponent(accountId)}`);
     const listD = await listR.json().catch(() => ({}));
     const convs = (listR.ok ? listD : {}).conversations || [];
-    const c = convs.find(x => x.user_id === userId);
+    const c = convs.find(x => String(x.user_id) === String(userId));
     document.getElementById('reply-text').value = (c && c.ai_reply_suggested) ? c.ai_reply_suggested : '';
 }
 
 document.getElementById('close-detail').onclick = () => {
     document.getElementById('conversation-detail').style.display = 'none';
+    document.getElementById('inbox-detail-empty').style.display = 'flex';
     currentUserId = null;
+    document.querySelectorAll('.conv-item').forEach(el => el.classList.remove('active'));
 };
 
 document.getElementById('suggest-reply-btn').onclick = async () => {
@@ -222,6 +352,9 @@ document.getElementById('send-reply-btn').onclick = async () => {
         if (r.ok && d.status === 'success') {
             document.getElementById('reply-text').value = '';
             document.getElementById('conversation-detail').style.display = 'none';
+            document.getElementById('inbox-detail-empty').style.display = 'flex';
+            currentUserId = null;
+            document.querySelectorAll('.conv-item').forEach(el => el.classList.remove('active'));
             loadConversations();
         } else {
             const err = typeof d.detail === 'string' ? d.detail : (Array.isArray(d.detail) && d.detail[0] ? d.detail[0].msg || String(d.detail[0]) : null) || d.error || 'Send failed';
@@ -233,12 +366,51 @@ document.getElementById('send-reply-btn').onclick = async () => {
     btn.disabled = false;
 };
 
-document.getElementById('refresh-inbox').onclick = loadConversations;
+document.getElementById('refresh-inbox').onclick = () => { loadConversations(); };
+
+let autoRefreshInterval = null;
+const AUTO_REFRESH_SECONDS = 15;
+
+function startAutoRefresh() {
+    if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+    autoRefreshInterval = setInterval(() => {
+        const accountId = document.getElementById('inbox-account').value;
+        if (accountId && document.getElementById('inbox-content').style.display !== 'none') {
+            loadConversations();
+        }
+    }, AUTO_REFRESH_SECONDS * 1000);
+}
+
+function stopAutoRefresh() {
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
+    }
+    stopCountdown();
+}
+
+document.getElementById('auto-refresh-inbox').addEventListener('change', function() {
+    if (this.checked) {
+        startAutoRefresh();
+        const accountId = document.getElementById('inbox-account').value;
+        if (accountId && document.getElementById('inbox-content').style.display !== 'none') {
+            startCountdown();
+        }
+    } else {
+        stopAutoRefresh();
+    }
+});
 
 document.addEventListener('DOMContentLoaded', async () => {
     await loadAccounts();
     const accountId = document.getElementById('inbox-account').value;
-    if (accountId) loadConversations();
+    if (accountId) {
+        await loadConversations();
+        if (document.getElementById('auto-refresh-inbox').checked) {
+            startAutoRefresh();
+            if (document.getElementById('inbox-content').style.display !== 'none') startCountdown();
+        }
+    }
 });
 </script>
 {% endblock %}

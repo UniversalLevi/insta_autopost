@@ -62,12 +62,13 @@ def add_message(
     """
     data = _load()
     now = datetime.utcnow().isoformat()
-    key = _conv_key(account_id, user_id)
+    key = _conv_key(str(account_id or ""), str(user_id or ""))
 
+    aid, uid = str(account_id or ""), str(user_id or "")
     entry = {
-        "account_id": account_id,
-        "user_id": user_id,
-        "username": username or user_id,
+        "account_id": aid,
+        "user_id": uid,
+        "username": username or uid,
         "message": message[:2000] if message else "",
         "timestamp": now,
         "message_id": message_id,
@@ -81,9 +82,9 @@ def add_message(
     conversations = data.get("conversations") or {}
     if key not in conversations:
         conversations[key] = {
-            "account_id": account_id,
-            "user_id": user_id,
-            "username": username or user_id,
+            "account_id": aid,
+            "user_id": uid,
+            "username": username or uid,
             "last_message": message[:200] if message else "",
             "last_timestamp": now,
             "message_count": 0,
@@ -111,9 +112,10 @@ def list_conversations(account_id: str) -> List[Dict[str, Any]]:
     """List conversations for an account, newest first."""
     data = _load()
     convs = data.get("conversations") or {}
+    aid = str(account_id) if account_id is not None else ""
     result = []
     for k, v in convs.items():
-        if v.get("account_id") == account_id:
+        if str(v.get("account_id") or "") == aid:
             result.append(dict(v))
     result.sort(key=lambda x: x.get("last_timestamp", ""), reverse=True)
     return result
@@ -123,9 +125,11 @@ def get_messages(account_id: str, user_id: str) -> List[Dict[str, Any]]:
     """Get all messages for a conversation."""
     data = _load()
     msgs = data.get("messages") or []
+    aid = str(account_id) if account_id is not None else ""
+    uid = str(user_id) if user_id is not None else ""
     result = [
         m for m in msgs
-        if m.get("account_id") == account_id and m.get("user_id") == user_id
+        if str(m.get("account_id") or "") == aid and str(m.get("user_id") or "") == uid
     ]
     result.sort(key=lambda x: x.get("timestamp", ""))
     return result
@@ -134,17 +138,18 @@ def get_messages(account_id: str, user_id: str) -> List[Dict[str, Any]]:
 def update_suggestion(account_id: str, user_id: str, ai_reply_suggested: str) -> bool:
     """Update AI suggested reply for the latest message in conversation."""
     data = _load()
-    key = _conv_key(account_id, user_id)
+    key = _conv_key(str(account_id or ""), str(user_id or ""))
     convs = data.get("conversations") or {}
     conv_updated = False
     if key in convs:
         convs[key]["ai_reply_suggested"] = ai_reply_suggested
         data["conversations"] = convs
         conv_updated = True
+    aid, uid = str(account_id or ""), str(user_id or "")
     msgs = data.get("messages") or []
     msg_updated = False
     for m in reversed(msgs):
-        if m.get("account_id") == account_id and m.get("user_id") == user_id:
+        if str(m.get("account_id") or "") == aid and str(m.get("user_id") or "") == uid:
             m["ai_reply_suggested"] = ai_reply_suggested
             msg_updated = True
             break
@@ -157,7 +162,7 @@ def update_suggestion(account_id: str, user_id: str, ai_reply_suggested: str) ->
 def mark_sent(account_id: str, user_id: str) -> None:
     """Mark that a reply was sent to this user."""
     data = _load()
-    key = _conv_key(account_id, user_id)
+    key = _conv_key(str(account_id or ""), str(user_id or ""))
     convs = data.get("conversations") or {}
     if key in convs:
         convs[key]["status"] = "sent"

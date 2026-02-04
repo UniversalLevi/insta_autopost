@@ -172,17 +172,27 @@ def _process_incoming_dm_for_ai_reply(account_id: str, value: Dict[str, Any], ap
     )
     
     # Instagram sends: "sender" (not "from") and "message" - support both
-    from_obj = value.get("from") or value.get("sender") or {}
+    # Meta can send sender/from as a string (user ID) or as a dict
+    _raw_from = value.get("from") or value.get("sender")
+    from_obj = _raw_from if isinstance(_raw_from, dict) else {}
     message_obj = value.get("message") or {}
     
     # Try alternative structure (messaging array wrapper - value is { messaging: [ {...} ] })
-    if not from_obj or not message_obj:
+    if (not from_obj and not isinstance(_raw_from, str)) or not message_obj:
         messaging = value.get("messaging") or {}
         if isinstance(messaging, list) and messaging:
             messaging = messaging[0]
         if isinstance(messaging, dict):
-            from_obj = messaging.get("sender") or messaging.get("from") or from_obj or {}
-            message_obj = messaging.get("message") or message_obj or {}
+            _m_from = messaging.get("sender") or messaging.get("from")
+            if _m_from is not None:
+                from_obj = _m_from if isinstance(_m_from, dict) else {"id": str(_m_from)}
+            if not from_obj and _raw_from is not None:
+                from_obj = {"id": str(_raw_from)} if isinstance(_raw_from, str) else _raw_from
+            message_obj = message_obj or messaging.get("message") or {}
+    
+    # If sender/from was a string (user ID), normalize to dict so rest of code works
+    if isinstance(_raw_from, str) and _raw_from.strip() and not from_obj:
+        from_obj = {"id": str(_raw_from).strip()}
     
     # Try items array structure (Instagram Direct Messages)
     if not from_obj or not message_obj:
@@ -190,8 +200,10 @@ def _process_incoming_dm_for_ai_reply(account_id: str, value: Dict[str, Any], ap
         if items and isinstance(items, list) and len(items) > 0:
             item = items[0]
             if isinstance(item, dict):
-                from_obj = item.get("from") or from_obj or {}
-                message_obj = item.get("message") or message_obj or {}
+                _i_from = item.get("from")
+                if _i_from is not None:
+                    from_obj = from_obj or (_i_from if isinstance(_i_from, dict) else {"id": str(_i_from)})
+                message_obj = message_obj or item.get("message") or {}
     
     # Try direct message structure (some webhook formats)
     if not message_obj:
@@ -202,21 +214,32 @@ def _process_incoming_dm_for_ai_reply(account_id: str, value: Dict[str, Any], ap
         elif value.get("data") and isinstance(value.get("data"), dict):
             message_obj = value.get("data")
     
-    # Extract user_id - try multiple locations
+    # Extract user_id - try multiple locations (from_obj may now be dict with "id")
     user_id = None
     if from_obj and isinstance(from_obj, dict):
         user_id = from_obj.get("id") or from_obj.get("user_id")
+    if not user_id and isinstance(_raw_from, str) and _raw_from.strip():
+        user_id = str(_raw_from).strip()
     # Fallback: try direct in value
     if not user_id:
         user_id = value.get("sender_id") or value.get("from_id") or value.get("user_id")
+    if user_id is not None:
+        user_id = str(user_id).strip() or None
     
-    # Extract message text - try multiple locations
+    # Extract message text - message_obj can be dict or sometimes a string
     message_text = ""
-    if message_obj and isinstance(message_obj, dict):
+    if isinstance(message_obj, str):
+        message_text = message_obj.strip()
+        message_obj = {}
+    elif message_obj and isinstance(message_obj, dict):
         message_text = (message_obj.get("text") or message_obj.get("message") or "").strip()
     # Fallback: try direct in value
     if not message_text:
-        message_text = (value.get("text") or value.get("message") or "").strip()
+        _v_text = value.get("text") or value.get("message")
+        if isinstance(_v_text, str):
+            message_text = _v_text.strip()
+        else:
+            message_text = (str(_v_text).strip() if _v_text is not None else "")
     
     # Extract message_id
     message_id = None
@@ -224,11 +247,13 @@ def _process_incoming_dm_for_ai_reply(account_id: str, value: Dict[str, Any], ap
         message_id = message_obj.get("id") or message_obj.get("message_id") or message_obj.get("mid")
     if not message_id:
         message_id = value.get("id") or value.get("message_id") or value.get("mid")
+    if message_id is not None:
+        message_id = str(message_id)
     
     # Extract username (optional, for logging)
     username = ""
     if from_obj and isinstance(from_obj, dict):
-        username = from_obj.get("username") or from_obj.get("name") or ""
+        username = (from_obj.get("username") or from_obj.get("name") or "").strip()
     
     # Check if this is an outgoing/echo message (sent by us) - skip those
     # Instagram webhooks can include both incoming and outgoing messages
@@ -420,7 +445,9 @@ def _process_incoming_dm_for_ai_reply(account_id: str, value: Dict[str, Any], ap
                 )
                 return
             # Username is optional - send_direct_message can work with just recipient_id
-            recipient_username = username or (from_obj.get("username") if isinstance(from_obj, dict) else "") or ""
+            recipient_username = (username or "").strip()
+            if not recipient_username and from_obj and isinstance(from_obj, dict):
+                recipient_username = (from_obj.get("username") or from_obj.get("name") or "").strip()
             
             logger.info(
                 "AI_DM_WEBHOOK",
