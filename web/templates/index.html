@@ -10,7 +10,7 @@
         <div id="account-selector" class="grid grid-3">
             <div class="text-muted">Loading accounts...</div>
         </div>
-        <div style="margin-top: 0.75rem; padding: 1rem; background: var(--info-light); border-radius: var(--radius-sm); border-left: 4px solid var(--info);">
+        <div style="margin-top: 0.75rem; padding: 1rem; background: var(--info-light); border-radius: var(--radius-sm); border-left: 4px solid var(--info); border: 1px solid rgba(59, 130, 246, 0.3);">
             <a href="/auth/meta/login" class="btn btn-secondary" style="text-decoration: none; margin-bottom: 0.5rem;">
                 <span>🔗</span> Connect with Meta
             </a>
@@ -26,7 +26,7 @@
             <button type="button" class="btn btn-secondary" data-type="reels" onclick="setMediaType('reels')">Reels</button>
             <button type="button" class="btn btn-secondary" data-type="carousel" onclick="setMediaType('carousel')">Carousel</button>
         </div>
-        <div id="video-reels-note" class="text-sm text-muted" style="display: none; margin-top: 6px; padding: 8px; background: #ecfdf5; border-radius: 4px; border-left: 3px solid #10b981;">
+        <div id="video-reels-note" class="text-sm text-muted" style="display: none; margin-top: 6px; padding: 8px; background: var(--success-light); border-radius: 4px; border-left: 3px solid var(--success); border: 1px solid rgba(16, 185, 129, 0.3); color: #6EE7B7;">
             <strong>Video & Reels:</strong> Same as posts. Upload from your device below — files are stored on your server and published to Instagram. Set <code>BASE_URL</code> to your public URL in production.
         </div>
         <input type="hidden" id="media-type" value="image">
@@ -44,7 +44,7 @@
         <label class="form-label">Media URLs</label>
         <textarea id="media-urls" class="form-control" rows="3" placeholder="https://yourdomain.com/uploads/video.mp4&#10;Or any public HTTPS URL"></textarea>
         <div class="text-sm text-muted">One URL per line. Image: .jpg .png .webp. Video: .mp4 .mov</div>
-        <div id="video-url-warning" class="text-sm" style="display: none; margin-top: 8px; padding: 8px; background: #fef3c7; border-radius: 4px; border-left: 3px solid #f59e0b;">
+        <div id="video-url-warning" class="text-sm" style="display: none; margin-top: 8px; padding: 8px; background: var(--warning-light); border-radius: 4px; border-left: 3px solid var(--warning); border: 1px solid rgba(245, 158, 11, 0.3); color: #FCD34D;">
             Use a stable public HTTPS URL. Prefer &quot;Upload Media&quot; above so the file is stored on your server.
         </div>
     </div>

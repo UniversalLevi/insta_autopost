@@ -25,7 +25,7 @@
     <div id="health-summary" class="health-summary" style="display: none;"></div>
 
     <div id="accounts-list" class="accounts-list">
-        <div class="loading"><div class="loading-spinner"></div>Loading account status...</div>
+        <div class="loading" id="initial-loading"><div class="loading-spinner"></div>Loading account status...</div>
     </div>
 </div>
 
@@ -52,27 +52,37 @@
 }
 
 .account-card {
-    background: white;
+    background: var(--bg-card);
     border-radius: 8px;
     padding: 20px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    border-left: 4px solid #ccc;
+    box-shadow: var(--shadow);
+    border-left: 4px solid var(--border);
+    border: 1px solid var(--border);
+    transition: all 0.2s ease;
+}
+
+.account-card:hover {
+    box-shadow: var(--shadow-md), 0 0 10px rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
 }
 
 .account-card.healthy {
-    border-left-color: #10b981;
+    border-left-color: var(--success);
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
 }
 
 .account-card.warning {
-    border-left-color: #f59e0b;
+    border-left-color: var(--warning);
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.2);
 }
 
 .account-card.critical {
-    border-left-color: #ef4444;
+    border-left-color: var(--primary);
+    box-shadow: 0 0 15px rgba(220, 38, 38, 0.3);
 }
 
 .account-card.unknown {
-    border-left-color: #6b7280;
+    border-left-color: var(--text-muted);
 }
 
 .account-header {
@@ -86,10 +96,11 @@
     margin: 0 0 4px 0;
     font-size: 18px;
     font-weight: 600;
+    color: var(--text-main);
 }
 
 .account-info .account-id {
-    color: #6b7280;
+    color: var(--text-muted);
     font-size: 14px;
 }
 
@@ -100,26 +111,31 @@
     font-size: 12px;
     font-weight: 600;
     text-transform: uppercase;
+    border: 1px solid;
 }
 
 .status-badge.healthy {
-    background: #d1fae5;
-    color: #065f46;
+    background: var(--success-light);
+    color: #6EE7B7;
+    border-color: rgba(16, 185, 129, 0.3);
 }
 
 .status-badge.warning {
-    background: #fef3c7;
-    color: #92400e;
+    background: var(--warning-light);
+    color: #FCD34D;
+    border-color: rgba(245, 158, 11, 0.3);
 }
 
 .status-badge.critical {
-    background: #fee2e2;
-    color: #991b1b;
+    background: var(--error-light);
+    color: #FCA5A5;
+    border-color: rgba(239, 68, 68, 0.3);
 }
 
 .status-badge.unknown {
-    background: #f3f4f6;
-    color: #374151;
+    background: var(--bg-hover);
+    color: var(--text-muted);
+    border-color: var(--border);
 }
 
 .checks-grid {
@@ -131,57 +147,74 @@
 
 .check-item {
     padding: 12px;
-    background: #f9fafb;
+    background: var(--bg-hover);
     border-radius: 6px;
-    border-left: 3px solid #ccc;
+    border-left: 3px solid var(--border);
+    color: var(--text-main);
 }
 
 .check-item.ok {
-    border-left-color: #10b981;
+    border-left-color: var(--success);
+    box-shadow: 0 0 5px rgba(16, 185, 129, 0.1);
 }
 
 .check-item.failed {
-    border-left-color: #ef4444;
+    border-left-color: var(--primary);
+    box-shadow: 0 0 5px rgba(220, 38, 38, 0.2);
 }
 
 .check-item.unknown {
-    border-left-color: #6b7280;
+    border-left-color: var(--text-muted);
 }
 
 .check-name {
     font-weight: 600;
     font-size: 14px;
     margin-bottom: 4px;
+    color: var(--text-main);
 }
 
 .check-status {
     font-size: 12px;
-    color: #6b7280;
+    color: var(--text-muted);
 }
 
 .check-error {
     font-size: 12px;
-    color: #ef4444;
+    color: #FCA5A5;
     margin-top: 4px;
 }
 
 .loading {
     text-align: center;
     padding: 40px;
-    color: #6b7280;
+    color: var(--text-muted);
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 12px;
 }
 
+.loading[style*="display: none"] {
+    display: none !important;
+}
+
 .loading-spinner {
     width: 32px;
     height: 32px;
-    border: 3px solid #e5e7eb;
-    border-top-color: #6366f1;
+    border: 3px solid var(--border);
+    border-top-color: var(--primary);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
+    box-shadow: 0 0 10px rgba(220, 38, 38, 0.5);
+}
+
+.loading[style*="display: none"] .loading-spinner {
+    animation: none;
+}
+
+#initial-loading {
+    display: none !important;
 }
 
 @keyframes spin {
@@ -189,60 +222,66 @@
 }
 
 .error-message {
-    background: #fee2e2;
-    color: #991b1b;
+    background: var(--error-light);
+    color: #FCA5A5;
     padding: 12px;
     border-radius: 6px;
     margin-bottom: 20px;
+    border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .success-message {
-    background: #d1fae5;
-    color: #065f46;
+    background: var(--success-light);
+    color: #6EE7B7;
     padding: 12px;
     border-radius: 6px;
     margin-bottom: 20px;
+    border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
 .warming-status-card {
-    background: white;
+    background: var(--bg-card);
     border-radius: 8px;
     padding: 16px 20px;
     margin-bottom: 20px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    border-left: 4px solid #f59e0b;
+    box-shadow: var(--shadow);
+    border-left: 4px solid var(--warning);
+    border: 1px solid var(--border);
 }
 
 .warming-status-card h4 {
     margin: 0 0 8px 0;
     font-size: 14px;
-    color: #374151;
+    color: var(--text-main);
 }
 
 .warming-status-card .schedule {
     font-size: 13px;
-    color: #6b7280;
+    color: var(--text-muted);
     margin-bottom: 8px;
 }
 
 .warming-status-card .accounts-enabled {
     font-size: 12px;
-    color: #6b7280;
+    color: var(--text-muted);
 }
 
 .health-summary {
     margin-bottom: 20px;
     padding: 16px 20px;
     border-radius: 8px;
-    border-left: 4px solid #f59e0b;
-    background: #fffbeb;
-    color: #92400e;
+    border-left: 4px solid var(--warning);
+    background: rgba(245, 158, 11, 0.1);
+    color: #FCD34D;
+    border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
 .health-summary.critical {
-    border-left-color: #ef4444;
-    background: #fef2f2;
-    color: #991b1b;
+    border-left-color: var(--primary);
+    background: var(--error-light);
+    color: #FCA5A5;
+    border-color: rgba(239, 68, 68, 0.3);
+    box-shadow: 0 0 15px rgba(220, 38, 38, 0.2);
 }
 
 .health-summary h4 {
@@ -260,10 +299,11 @@
     margin-bottom: 12px;
     padding: 12px;
     border-radius: 6px;
-    background: #fef2f2;
-    border-left: 3px solid #ef4444;
+    background: var(--error-light);
+    border-left: 3px solid var(--primary);
     font-size: 13px;
-    color: #991b1b;
+    color: #FCA5A5;
+    border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .account-card .issues-block h4 {
@@ -290,9 +330,18 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
-async function loadAccountStatus() {
+async function loadAccountStatus(showLoading = true) {
     const container = document.getElementById('accounts-list');
-    container.innerHTML = '<div class="loading"><div class="loading-spinner"></div>Loading account status...</div>';
+    const initialLoading = document.getElementById('initial-loading');
+    
+    // Remove initial loading immediately to stop animation
+    if (initialLoading) {
+        initialLoading.remove(); // Remove from DOM to stop animation
+    }
+    
+    if (showLoading) {
+        container.innerHTML = '<div class="loading"><div class="loading-spinner"></div>Loading account status...</div>';
+    }
     
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), STATUS_FETCH_TIMEOUT_MS);
@@ -385,9 +434,15 @@ function renderHealthSummary(accounts) {
 
 function renderAccounts(accounts) {
     const container = document.getElementById('accounts-list');
+    const initialLoading = document.getElementById('initial-loading');
+    
+    // Ensure initial loading is removed
+    if (initialLoading) {
+        initialLoading.remove(); // Remove from DOM to stop animation
+    }
     
     if (accounts.length === 0) {
-        container.innerHTML = '<div class="loading">No accounts configured</div>';
+        container.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-muted);">No accounts configured</div>';
         return;
     }
     
@@ -487,11 +542,19 @@ document.getElementById('reload-accounts').addEventListener('click', async () =>
     }
 });
 
+// Remove initial loading immediately on page load to stop animation
+document.addEventListener('DOMContentLoaded', () => {
+    const initialLoading = document.getElementById('initial-loading');
+    if (initialLoading) {
+        initialLoading.remove();
+    }
+});
+
 // Load on page load
 loadAccountStatus();
 
-// Auto-refresh every 60 seconds
-refreshInterval = setInterval(loadAccountStatus, 60000);
+// Auto-refresh every 60 seconds (don't show loading spinner on auto-refresh)
+refreshInterval = setInterval(() => loadAccountStatus(false), 60000);
 
 // Cleanup on page unload
 window.addEventListener('beforeunload', () => {

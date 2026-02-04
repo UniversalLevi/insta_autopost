@@ -11,42 +11,46 @@
             align-items: center;
             justify-content: center;
             min-height: 100vh;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #0A0A0A 0%, #1A0000 50%, #0A0A0A 100%);
             padding: 2rem;
         }
         .auth-card {
-            background: white;
+            background: var(--bg-card);
             border-radius: var(--radius-lg);
-            box-shadow: var(--shadow-lg);
+            box-shadow: var(--shadow-lg), 0 0 30px rgba(220, 38, 38, 0.3);
             padding: 3rem;
             width: 100%;
             max-width: 420px;
             animation: slideUp 0.4s ease;
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
         .auth-title {
             font-size: 2rem;
             font-weight: 700;
             margin-bottom: 0.5rem;
             text-align: center;
-            background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+            background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
+            text-shadow: 0 0 10px rgba(220, 38, 38, 0.5);
         }
         .auth-subtitle {
             text-align: center;
             color: var(--text-muted);
             margin-bottom: 2rem;
             font-size: 0.9375rem;
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
         }
         .info-message {
             background: var(--info-light);
-            color: #1E40AF;
+            color: #93C5FD;
             padding: 1rem;
             border-radius: var(--radius-sm);
             margin-bottom: 1.5rem;
             font-size: 0.875rem;
             border-left: 4px solid var(--info);
+            border: 1px solid rgba(59, 130, 246, 0.3);
         }
         .error-message, .success-message {
             padding: 1rem;
@@ -57,13 +61,15 @@
         }
         .error-message {
             background: var(--error-light);
-            color: #991B1B;
+            color: #FCA5A5;
             border-left: 4px solid var(--error);
+            border: 1px solid rgba(239, 68, 68, 0.3);
         }
         .success-message {
             background: var(--success-light);
-            color: #065F46;
+            color: #6EE7B7;
             border-left: 4px solid var(--success);
+            border: 1px solid rgba(16, 185, 129, 0.3);
         }
         .btn-block {
             width: 100%;
@@ -80,11 +86,13 @@
             color: var(--primary);
             text-decoration: none;
             font-weight: 600;
-            transition: color 0.2s ease;
+            transition: all 0.2s ease;
+            text-shadow: 0 0 8px rgba(220, 38, 38, 0.5);
         }
         .auth-link a:hover {
-            color: var(--primary-dark);
+            color: var(--primary-light);
             text-decoration: underline;
+            text-shadow: 0 0 12px rgba(220, 38, 38, 0.8);
         }
         .password-requirements {
             font-size: 0.8125rem;

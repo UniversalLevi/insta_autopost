@@ -24,9 +24,9 @@ async function loadLogs() {
 
         tbody.innerHTML = data.logs.map(log => {
             let badgeStyle = '';
-            if (log.level === 'WARNING') badgeStyle = 'background: #FEF3C7; color: #92400E;';
-            if (log.level === 'ERROR') badgeStyle = 'background: #FEE2E2; color: #991B1B;';
-            if (log.level === 'INFO') badgeStyle = 'background: #DBEAFE; color: #1E40AF;';
+            if (log.level === 'WARNING') badgeStyle = 'background: rgba(245, 158, 11, 0.15); color: #FCD34D; border: 1px solid rgba(245, 158, 11, 0.3);';
+            if (log.level === 'ERROR') badgeStyle = 'background: rgba(239, 68, 68, 0.15); color: #FCA5A5; border: 1px solid rgba(239, 68, 68, 0.3);';
+            if (log.level === 'INFO') badgeStyle = 'background: rgba(59, 130, 246, 0.15); color: #93C5FD; border: 1px solid rgba(59, 130, 246, 0.3);';
 
             let timeStr = '—';
             try {

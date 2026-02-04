@@ -100,7 +100,7 @@ function setupFileUpload() {
     dropZone.ondragover = (e) => {
         e.preventDefault();
         dropZone.style.borderColor = 'var(--primary)';
-        dropZone.style.background = '#EFF6FF';
+        dropZone.style.background = 'rgba(220, 38, 38, 0.15)';
     };
 
     dropZone.ondragleave = (e) => {
@@ -450,7 +450,7 @@ function setupBatchFileUpload() {
     dropZone.ondragover = (e) => {
         e.preventDefault();
         dropZone.style.borderColor = 'var(--primary)';
-        dropZone.style.background = '#EFF6FF';
+        dropZone.style.background = 'rgba(220, 38, 38, 0.15)';
     };
 
     dropZone.ondragleave = (e) => {
@@ -526,7 +526,7 @@ function setupBatchZipUpload() {
     dropZone.ondragover = (e) => {
         e.preventDefault();
         dropZone.style.borderColor = 'var(--primary)';
-        dropZone.style.background = '#EFF6FF';
+        dropZone.style.background = 'rgba(220, 38, 38, 0.15)';
     };
 
     dropZone.ondragleave = (e) => {

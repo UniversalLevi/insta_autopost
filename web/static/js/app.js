@@ -33,7 +33,7 @@ async function checkSystemStatus() {
 
     function setOk() {
         statusEl.textContent = 'System Operational';
-        if (dotEl) { dotEl.classList.add('active'); dotEl.style.backgroundColor = 'var(--success)'; }
+        if (dotEl) { dotEl.classList.add('active'); dotEl.style.backgroundColor = 'var(--primary)'; }
     }
     function setWarn() {
         statusEl.textContent = 'System Issues';

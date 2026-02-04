@@ -585,15 +585,15 @@ setInterval(loadMemoryStats, 30000); // Refresh stats every 30 seconds
 }
 
 .alert-error {
-    background: #FEE2E2;
-    color: #991B1B;
-    border: 1px solid #FCA5A5;
+    background: var(--error-light);
+    color: #FCA5A5;
+    border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .alert-success {
-    background: #D1FAE5;
-    color: #065F46;
-    border: 1px solid #6EE7B7;
+    background: var(--success-light);
+    color: #6EE7B7;
+    border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
 /* Tabs */
@@ -623,13 +623,16 @@ setInterval(loadMemoryStats, 30000); // Refresh stats every 30 seconds
 
 .tab-btn:hover {
     color: var(--primary);
-    background: rgba(37, 99, 235, 0.05);
+    background: rgba(220, 38, 38, 0.1);
+    text-shadow: 0 0 5px rgba(220, 38, 38, 0.3);
 }
 
 .tab-btn.active {
     color: var(--primary);
     border-bottom-color: var(--primary);
-    background: rgba(37, 99, 235, 0.05);
+    background: rgba(220, 38, 38, 0.15);
+    box-shadow: 0 0 10px rgba(220, 38, 38, 0.2);
+    text-shadow: 0 0 8px rgba(220, 38, 38, 0.5);
 }
 
 .tab-icon {
@@ -711,7 +714,8 @@ setInterval(loadMemoryStats, 30000); // Refresh stats every 30 seconds
 }
 
 .checkbox-label-large:hover {
-    background: #E5E7EB;
+    background: var(--bg-hover);
+    box-shadow: 0 0 5px rgba(255, 255, 255, 0.1);
 }
 
 .checkbox-label-large input[type="checkbox"] {
@@ -761,13 +765,15 @@ setInterval(loadMemoryStats, 30000); // Refresh stats every 30 seconds
 }
 
 .info-box {
-    background: #EFF6FF;
-    border: 1px solid #BFDBFE;
+    background: var(--info-light);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    color: #93C5FD;
 }
 
 .warning-box {
-    background: #FEF3C7;
-    border: 1px solid #FDE68A;
+    background: var(--warning-light);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    color: #FCD34D;
 }
 
 .info-icon, .warning-icon {
@@ -775,9 +781,14 @@ setInterval(loadMemoryStats, 30000); // Refresh stats every 30 seconds
     flex-shrink: 0;
 }
 
-.info-content, .warning-content {
+.info-content {
     flex: 1;
-    color: var(--text-main);
+    color: #93C5FD;
+}
+
+.warning-content {
+    flex: 1;
+    color: #FCD34D;
 }
 
 .info-content ul, .warning-content ul {
@@ -802,15 +813,17 @@ setInterval(loadMemoryStats, 30000); // Refresh stats every 30 seconds
     align-items: center;
     gap: 1.5rem;
     padding: 1.5rem;
-    background: white;
+    background: var(--bg-card);
     border-radius: 0.75rem;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border);
     transition: transform 0.2s, box-shadow 0.2s;
 }
 
 .stat-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    box-shadow: var(--shadow-md), 0 0 10px rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
 }
 
 .stat-icon {
@@ -834,9 +847,18 @@ setInterval(loadMemoryStats, 30000); // Refresh stats every 30 seconds
     font-weight: 500;
 }
 
-.stat-primary .stat-value { color: var(--primary); }
-.stat-success .stat-value { color: var(--success); }
-.stat-info .stat-value { color: #3B82F6; }
+.stat-primary .stat-value { 
+    color: var(--primary); 
+    text-shadow: 0 0 8px rgba(220, 38, 38, 0.5);
+}
+.stat-success .stat-value { 
+    color: var(--success); 
+    text-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+}
+.stat-info .stat-value { 
+    color: #93C5FD; 
+    text-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
+}
 
 /* Memory Actions */
 .memory-actions {
@@ -858,13 +880,13 @@ setInterval(loadMemoryStats, 30000); // Refresh stats every 30 seconds
 .form-actions-bar {
     position: sticky;
     bottom: 0;
-    background: white;
+    background: var(--bg-card);
     padding: 1.5rem;
     margin: 2rem -2rem -2rem -2rem;
     border-top: 2px solid var(--border);
     display: flex;
     gap: 1rem;
-    box-shadow: 0 -4px 6px rgba(0,0,0,0.05);
+    box-shadow: 0 -4px 6px rgba(0,0,0,0.3), 0 0 10px rgba(255, 255, 255, 0.05);
 }
 
 /* Responsive */

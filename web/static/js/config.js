@@ -24,7 +24,7 @@ async function loadAccounts() {
                     <div class="font-bold">${acc.username}</div>
                     <div class="text-sm text-muted">${acc.account_id}</div>
                     <div class="text-sm mt-1">
-                        ${acc.warming && acc.warming.enabled ? '<span class="badge badge-info" style="background: #DBEAFE; color: #1E40AF;">Warming On</span>' : '<span class="text-muted">Warming Off</span>'}
+                        ${acc.warming && acc.warming.enabled ? '<span class="badge badge-info" style="background: rgba(59, 130, 246, 0.15); color: #93C5FD; border: 1px solid rgba(59, 130, 246, 0.3);">Warming On</span>' : '<span class="text-muted">Warming Off</span>'}
                     </div>
                 </div>
                 <div class="flex gap-2">
