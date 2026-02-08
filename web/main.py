@@ -19,7 +19,7 @@ from .cloudflare_helper import start_cloudflare, stop_cloudflare, get_cloudflare
 from .instagram_webhook import process_webhook_payload
 from .scheduled_publisher import start_scheduled_publisher, stop_scheduled_publisher
 from .warming_scheduler import start_warming_scheduler, stop_warming_scheduler
-from .warmup_automation_scheduler import start_warmup_automation_scheduler, stop_warmup_automation_scheduler
+from src.features.warmup.scheduler import start_scheduler as start_warmup_automation_scheduler, stop_scheduler as stop_warmup_automation_scheduler
 from .rest_cycle import start_rest_cycle, stop_rest_cycle
 from src.app import InstaForgeApp
 from src.services.token_refresher import start_daily_token_refresh_job, stop_daily_token_refresh_job

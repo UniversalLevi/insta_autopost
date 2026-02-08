@@ -7,13 +7,13 @@ Guided actions and safe API calls → allowed with limits.
 
 from typing import Optional
 
-from src.features.warmup.warmup_store import get_warmup_plan
+from src.features.warmup.store import get_plan
 
 
 def is_warmup_active(account_id: str) -> bool:
     """Return True if account has an active warm-up in progress."""
-    plan = get_warmup_plan(account_id)
-    return plan is not None and plan.get("status") == "active"
+    plan = get_plan(account_id)
+    return plan is not None and plan.status == "active"
 
 
 def warmup_allows_action(

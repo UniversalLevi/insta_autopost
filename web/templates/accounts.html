@@ -8,6 +8,9 @@
 <div class="accounts-status-page">
     <div class="page-header">
         <div class="header-actions">
+            <button id="connect-account" class="btn btn-primary">
+                <span class="icon">➕</span> Connect Account
+            </button>
             <button id="refresh-status" class="btn btn-primary">
                 <span class="icon">🔄</span> Refresh Status
             </button>
@@ -26,6 +29,53 @@
 
     <div id="accounts-list" class="accounts-list">
         <div class="loading" id="initial-loading"><div class="loading-spinner"></div>Loading account status...</div>
+    </div>
+</div>
+
+<!-- Connect Account Modal -->
+<div id="connect-account-modal" class="modal hidden" style="display: none;">
+    <div class="modal-content card" style="position: relative; margin: 5% auto; max-width: 500px; max-height: 90vh; overflow-y: auto;">
+        <h3>Connect Instagram Account</h3>
+        <form id="connect-account-form" onsubmit="event.preventDefault(); saveConnectAccount();">
+            <div class="form-group">
+                <label class="form-label">Account ID (Instagram Business ID)</label>
+                <input type="text" id="conn-acc-id" class="form-control" required placeholder="e.g. 17841444586383008">
+                <div class="text-sm text-muted">Found in Meta Business Suite when you connect Instagram</div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Username</label>
+                <input type="text" id="conn-acc-username" class="form-control" required placeholder="instagram_username">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Access Token</label>
+                <textarea id="conn-acc-token" class="form-control" rows="3" required placeholder="Long-lived access token from Meta"></textarea>
+                <div class="text-sm text-muted">Generate in Meta for Developers or Business Suite</div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Instagram password (for warm-up)</label>
+                <input type="password" id="conn-acc-password" class="form-control" autocomplete="off" placeholder="Optional – for browser warm-up actions">
+            </div>
+            <div class="form-group">
+                <label class="form-label flex items-center gap-2">
+                    <input type="checkbox" id="conn-acc-warming" checked> Enable Warming
+                </label>
+            </div>
+            <div class="form-group">
+                <label class="form-label flex items-center gap-2">
+                    <input type="checkbox" id="conn-acc-dm-enabled"> Enable Comment Auto-DM
+                </label>
+                <input type="url" id="conn-acc-dm-link" class="form-control mt-2" placeholder="https://example.com/file.pdf (public URL)" style="max-width: 100%;">
+            </div>
+            <div class="form-group">
+                <label class="form-label flex items-center gap-2">
+                    <input type="checkbox" id="conn-acc-ai-dm-enabled" checked> Enable AI DM auto-reply
+                </label>
+            </div>
+            <div class="flex justify-end gap-2 mt-4">
+                <button type="button" class="btn btn-secondary" onclick="closeConnectAccountModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Connect Account</button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -495,6 +545,80 @@ function renderAccounts(accounts) {
 document.getElementById('refresh-status').addEventListener('click', () => {
     loadAccountStatus();
 });
+
+document.getElementById('connect-account').addEventListener('click', openConnectAccountModal);
+
+function openConnectAccountModal() {
+    const modal = document.getElementById('connect-account-modal');
+    modal.style.display = 'flex';
+    modal.classList.remove('hidden');
+    document.getElementById('connect-account-form').reset();
+    document.getElementById('conn-acc-warming').checked = true;
+    document.getElementById('conn-acc-dm-enabled').checked = false;
+    document.getElementById('conn-acc-ai-dm-enabled').checked = true;
+}
+
+function closeConnectAccountModal() {
+    const modal = document.getElementById('connect-account-modal');
+    modal.style.display = 'none';
+    modal.classList.add('hidden');
+}
+
+async function saveConnectAccount() {
+    const accountId = document.getElementById('conn-acc-id').value.trim();
+    const username = document.getElementById('conn-acc-username').value.trim();
+    const token = document.getElementById('conn-acc-token').value.trim();
+    const password = document.getElementById('conn-acc-password').value.trim();
+    const warming = document.getElementById('conn-acc-warming').checked;
+    const dmEnabled = document.getElementById('conn-acc-dm-enabled').checked;
+    const dmLink = document.getElementById('conn-acc-dm-link').value.trim();
+    const aiDmEnabled = document.getElementById('conn-acc-ai-dm-enabled').checked;
+
+    if (!accountId || !username || !token) {
+        alert('Please fill in Account ID, Username, and Access Token.');
+        return;
+    }
+
+    const accountData = {
+        account_id: accountId,
+        username: username,
+        access_token: token,
+        warming: {
+            enabled: warming,
+            daily_actions: 10,
+            action_types: ['like', 'comment']
+        },
+        proxy: { enabled: false },
+        comment_to_dm: {
+            enabled: dmEnabled,
+            link_to_send: dmLink || null
+        },
+        ai_dm: { enabled: aiDmEnabled, auto_send: true }
+    };
+    if (password) accountData.password = password;
+
+    try {
+        const response = await fetch('/api/config/accounts/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(accountData),
+            credentials: 'include'
+        });
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            const msg = typeof data.detail === 'string' ? data.detail : (data.detail?.message || JSON.stringify(data.detail));
+            throw new Error(msg || 'Failed to add account');
+        }
+
+        closeConnectAccountModal();
+        const container = document.getElementById('accounts-list');
+        container.innerHTML = '<div class="success-message">Account connected successfully. Refreshing...</div>';
+        setTimeout(() => loadAccountStatus(), 1000);
+    } catch (error) {
+        alert('Error: ' + (error.message || 'Failed to connect account'));
+    }
+}
 
 document.getElementById('run-warming').addEventListener('click', async () => {
     const button = document.getElementById('run-warming');

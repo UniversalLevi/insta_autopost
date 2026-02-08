@@ -51,48 +51,60 @@ class BrowserLikeAction:
             # Navigate to post
             await self.page.goto(post_url, wait_until="domcontentloaded", timeout=60000)
             
-            # Wait a bit for page to fully load
-            await self.page.wait_for_timeout(2000)
+            # Reels load slower - wait for controls to appear
+            is_reel = "/reel/" in post_url.lower()
+            await self.page.wait_for_timeout(4000 if is_reel else 2000)
             
             # Find and click the like button
-            # Instagram's like button can be: svg[aria-label="Like"], button[aria-label="Like"], etc.
+            # Reels: like is in right sidebar. Posts: below media. Both use aria-label.
             like_selectors = [
-                'svg[aria-label="Like"]',
                 'button[aria-label="Like"]',
+                '[role="button"][aria-label="Like"]',
+                'span[aria-label="Like"]',
+                'svg[aria-label="Like"]',
                 '[aria-label="Like"]',
                 'svg[aria-label*="Like"]',
+                'a[role="link"] svg[aria-label="Like"]',  # Reels sidebar link
             ]
             
             liked = False
-            for selector in like_selectors:
-                try:
-                    like_button = await self.page.wait_for_selector(selector, timeout=5000)
-                    if like_button:
-                        # Check if already liked
-                        parent = await like_button.query_selector("..")
-                        if parent:
-                            aria_label = await parent.get_attribute("aria-label")
-                            if aria_label and "Unlike" in aria_label:
-                                logger.debug("Post already liked", post_url=post_url)
-                                return {
-                                    "action": "like",
-                                    "post_url": post_url,
-                                    "status": "already_liked",
-                                    "timestamp": time.time(),
-                                }
-                        
-                        # Click like button
-                        await like_button.click()
-                        
-                        # Wait for like animation
-                        await self.page.wait_for_timeout(1000)
-                        
-                        liked = True
-                        logger.info("Post liked successfully", post_url=post_url)
-                        break
-                except Exception as e:
-                    logger.debug(f"Selector {selector} failed, trying next", error=str(e))
-                    continue
+            # Check if already liked (button shows "Unlike")
+            try:
+                unlike_btn = self.page.get_by_role("button", name="Unlike").first
+                await unlike_btn.wait_for(state="visible", timeout=2000)
+                logger.debug("Post already liked", post_url=post_url)
+                return {"action": "like", "post_url": post_url, "status": "already_liked", "timestamp": time.time()}
+            except Exception:
+                pass
+            # Try Playwright's role-based locator (robust for Reels and posts)
+            try:
+                like_btn = self.page.get_by_role("button", name="Like").first
+                await like_btn.wait_for(state="visible", timeout=5000)
+                await like_btn.click(timeout=5000)
+                await self.page.wait_for_timeout(1000)
+                liked = True
+                logger.info("Post liked successfully", post_url=post_url)
+            except Exception as e:
+                logger.debug("get_by_role Like failed, trying selectors", error=str(e))
+
+            if not liked:
+                for selector in like_selectors:
+                    try:
+                        like_button = await self.page.wait_for_selector(selector, timeout=3000)
+                        if like_button:
+                            parent = await like_button.query_selector("..")
+                            if parent:
+                                aria_label = await parent.get_attribute("aria-label")
+                                if aria_label and "Unlike" in aria_label:
+                                    logger.debug("Post already liked", post_url=post_url)
+                                    return {"action": "like", "post_url": post_url, "status": "already_liked", "timestamp": time.time()}
+                            await like_button.click()
+                            await self.page.wait_for_timeout(1000)
+                            liked = True
+                            logger.info("Post liked successfully", post_url=post_url)
+                            break
+                    except Exception:
+                        continue
             
             if not liked:
                 logger.warning("Could not find like button", post_url=post_url)

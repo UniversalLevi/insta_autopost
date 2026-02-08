@@ -1,5 +1,6 @@
 """Main application entry point"""
 
+import os
 import schedule
 import time
 from datetime import datetime
@@ -115,7 +116,8 @@ class InstaForgeApp:
         # Initialize browser automation (optional, for like/follow actions)
         try:
             from .automation.browser.browser_wrapper import BrowserWrapper
-            self.browser_wrapper = BrowserWrapper(headless=True)
+            headless = (os.getenv("HEADLESS", "true").strip().lower() not in ("0", "false", "no"))
+            self.browser_wrapper = BrowserWrapper(headless=headless)
             logger.info("Browser automation initialized")
         except ImportError as e:
             logger.warning(

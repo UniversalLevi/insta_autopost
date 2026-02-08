@@ -5,6 +5,7 @@ import time
 from typing import Optional, Dict
 
 from .browser_manager import BrowserManager
+from .browser_utils import is_browser_closed_error, BrowserClosedError
 from .session_manager import BrowserSessionManager
 from ...utils.logger import get_logger
 
@@ -56,12 +57,16 @@ class BrowserService:
             # If not logged in and we have password, try to login
             if password:
                 logger.info("Logging in to Instagram", account_id=account_id, username=username)
-                success = await self.session_manager.login(page, username, password, account_id)
-                if success:
-                    logger.info("Login successful", account_id=account_id, username=username)
-                    return True
-                else:
-                    logger.error("Login failed", account_id=account_id, username=username)
+                try:
+                    success = await self.session_manager.login(page, username, password, account_id)
+                    if success:
+                        logger.info("Login successful", account_id=account_id, username=username)
+                        return True
+                    else:
+                        logger.error("Login failed", account_id=account_id, username=username)
+                        return False
+                except BrowserClosedError:
+                    logger.debug("Browser closed during login (likely shutdown)", account_id=account_id)
                     return False
             else:
                 logger.warning(
@@ -72,7 +77,10 @@ class BrowserService:
                 return False
                 
         except Exception as e:
-            logger.error("Error ensuring login", account_id=account_id, error=str(e))
+            if is_browser_closed_error(e):
+                logger.debug("Browser closed during login (likely shutdown)", account_id=account_id)
+            else:
+                logger.error("Error ensuring login", account_id=account_id, error=str(e))
             return False
     
     async def like_post(

@@ -52,9 +52,12 @@
 
             <div class="card warmup-automation">
                 <h3>Automation</h3>
-                <p class="text-sm text-muted">Enable to auto-run like, comment, save from hashtag discovery. Requires Playwright and account password.</p>
+                <p class="text-sm text-muted">Enable to auto-run like, comment, save from hashtag discovery.</p>
                 <div class="warmup-proxy-hint">
-                    <strong>Post discovery uses the Instagram website in a browser.</strong> On a server, use a residential proxy in <strong>Settings → Global Proxy</strong>. On a home network, no proxy is needed—if proxy fails, it will retry without proxy automatically.
+                    <strong>Local setup (laptop):</strong> (1) Install Playwright: <code>pip install playwright && playwright install chromium</code>. (2) Set your Instagram password in <strong>Settings → Accounts → Edit</strong> (required for browser login). (3) Restart the app after installing Playwright.
+                </div>
+                <div class="warmup-proxy-hint" style="margin-top: 8px;">
+                    <strong>Post discovery</strong> uses the Instagram website in a browser. On a server, use a residential proxy in <strong>Settings → Global Proxy</strong>. On a home network, no proxy is needed—if proxy fails, it will retry without proxy automatically.
                 </div>
                 <div class="form-group">
                     <label class="checkbox-label">
@@ -69,6 +72,15 @@
                 <div style="display: flex; gap: 12px; align-items: center;">
                     <button id="save-automation-btn" class="btn btn-secondary">Save automation settings</button>
                     <button id="run-automation-now-btn" class="btn btn-primary">Run automation now</button>
+                </div>
+                <div id="warmup-live-progress" class="warmup-live-progress" style="display: none;">
+                    <div class="live-progress-header">
+                        <span class="loading-spinner-inline"></span>
+                        <strong>Live progress</strong>
+                        <button id="stop-warmup-btn" class="btn btn-danger btn-sm" style="margin-left: auto;">Stop Warmup</button>
+                    </div>
+                    <div id="live-progress-message" class="live-progress-message">—</div>
+                    <div id="live-progress-stats" class="live-progress-stats"></div>
                 </div>
             </div>
 
@@ -101,46 +113,54 @@
 
 <style>
 .warmup-page { padding: 20px; }
-.warmup-desc { color: #6b7280; margin-bottom: 16px; }
+.warmup-desc { color: var(--text-muted); margin-bottom: 16px; }
 .page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
-.warmup-loading { display: flex; align-items: center; gap: 12px; padding: 24px; color: #6b7280; }
-.loading-spinner-inline { display: inline-block; width: 20px; height: 20px; border: 2px solid #e5e7eb; border-top-color: #6366f1; border-radius: 50%; animation: warmup-spin 0.8s linear infinite; }
+.warmup-loading { display: flex; align-items: center; gap: 12px; padding: 24px; color: var(--text-muted); }
+.loading-spinner-inline { display: inline-block; width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: warmup-spin 0.8s linear infinite; }
 @keyframes warmup-spin { to { transform: rotate(360deg); } }
 
 .warmup-account-select { margin-bottom: 20px; max-width: 400px; }
 .warmup-empty, .warmup-paused, .warmup-completed { text-align: center; padding: 40px; }
 .warmup-dashboard { display: grid; gap: 20px; }
-.warmup-status-card { background: #f9fafb; border-radius: 8px; padding: 20px; border-left: 4px solid #10b981; }
+.warmup-status-card { background: var(--bg-card); border-radius: 8px; padding: 20px; border-left: 4px solid var(--success); border: 1px solid var(--border); border-left-width: 4px; }
 .status-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
-.status-label { font-weight: 600; color: #374151; }
-.status-value { font-size: 18px; font-weight: 700; color: #6366f1; }
+.status-label { font-weight: 600; color: var(--text-muted); }
+.status-value { font-size: 18px; font-weight: 700; color: var(--primary); }
 .status-badge { padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
-.status-badge.active { background: #d1fae5; color: #065f46; }
-.status-badge.paused { background: #fef3c7; color: #92400e; }
-.status-badge.completed { background: #dbeafe; color: #1e40af; }
-.progress-bar-wrap { height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden; margin: 12px 0; }
-.progress-bar { height: 100%; background: linear-gradient(90deg, #10b981, #6366f1); transition: width 0.3s; }
-.risk-row { margin-top: 12px; font-size: 14px; }
-.risk-value.risk-low { color: #10b981; }
-.risk-value.risk-mid { color: #f59e0b; }
-.risk-value.risk-high { color: #ef4444; }
+.status-badge.active { background: var(--success-light); color: #86EFAC; }
+.status-badge.paused { background: var(--warning-light); color: #FCD34D; }
+.status-badge.completed { background: var(--info-light); color: #93C5FD; }
+.progress-bar-wrap { height: 8px; background: var(--bg-hover); border-radius: 4px; overflow: hidden; margin: 12px 0; }
+.progress-bar { height: 100%; background: linear-gradient(90deg, var(--success), var(--primary)); transition: width 0.3s; }
+.risk-row { margin-top: 12px; font-size: 14px; color: var(--text-muted); }
+.risk-value.risk-low { color: var(--success); }
+.risk-value.risk-mid { color: var(--warning); }
+.risk-value.risk-high { color: var(--error); }
 
-.warmup-tasks h3 { margin: 0 0 16px 0; font-size: 18px; }
+.warmup-tasks h3 { margin: 0 0 16px 0; font-size: 18px; color: var(--text); }
 .tasks-list { display: grid; gap: 10px; margin-bottom: 20px; }
-.task-item { display: flex; align-items: center; gap: 12px; padding: 12px; background: #f9fafb; border-radius: 6px; border-left: 3px solid #e5e7eb; }
-.task-item.done { border-left-color: #10b981; background: #f0fdf4; }
-.task-item .task-check { width: 20px; height: 20px; border-radius: 4px; border: 2px solid #d1d5db; flex-shrink: 0; }
-.task-item.done .task-check { background: #10b981; border-color: #10b981; }
+.task-item { display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--bg-elevated); border-radius: 6px; border-left: 3px solid var(--border); color: var(--text); }
+.task-item.done { border-left-color: var(--success); background: var(--success-light); }
+.task-item .task-check { width: 20px; height: 20px; border-radius: 4px; border: 2px solid var(--border); flex-shrink: 0; }
+.task-item.done .task-check { background: var(--success); border-color: var(--success); }
 .task-item .task-label { flex: 1; }
-.task-item .task-count { color: #6b7280; font-size: 13px; }
+.task-item .task-count { color: var(--text-muted); font-size: 13px; }
 .warmup-actions { display: flex; gap: 12px; flex-wrap: wrap; }
-.btn-warning { border-color: #f59e0b; color: #92400e; }
-.warmup-warnings { background: #fef3c7; border-left: 4px solid #f59e0b; }
-.warmup-proxy-hint { font-size: 0.8125rem; color: #4b5563; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; padding: 10px 12px; margin-bottom: 16px; }
-.error-message { background: #fee2e2; color: #991b1b; padding: 12px; border-radius: 6px; margin-top: 20px; }
+.btn-warning { border-color: var(--warning); color: #FCD34D; }
+.warmup-warnings { background: var(--warning-light); border-left: 4px solid var(--warning); color: #FCD34D; }
+.warmup-proxy-hint { font-size: 0.8125rem; color: var(--text-muted); background: var(--info-light); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 6px; padding: 10px 12px; margin-bottom: 16px; }
+.warmup-page .error-message { background: var(--error-light); color: #FCA5A5; padding: 12px; border-radius: 6px; margin-top: 20px; border: 1px solid rgba(239, 68, 68, 0.3); }
 .warmup-automation { margin-bottom: 20px; }
-.checkbox-label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.warmup-automation h3, .warmup-tasks h3, .warmup-empty h3, .warmup-paused h3, .warmup-completed h3 { color: var(--text); }
+.warmup-empty p, .warmup-paused p, .warmup-completed p { color: var(--text-muted); }
+.checkbox-label { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text); }
 .checkbox-label input { width: auto; }
+.warmup-proxy-hint code { background: var(--bg-hover); padding: 2px 6px; border-radius: 4px; font-size: 0.85em; }
+.warmup-live-progress { margin-top: 16px; padding: 16px; background: var(--bg-elevated); border-radius: 8px; border: 1px solid var(--border); border-left: 4px solid var(--primary); }
+.live-progress-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; color: var(--text); flex-wrap: wrap; }
+.btn-sm { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
+.live-progress-message { color: var(--text-muted); font-size: 0.95rem; }
+.live-progress-stats { margin-top: 8px; font-size: 0.85rem; color: var(--text-subtle); }
 </style>
 
 <script>
@@ -154,10 +174,11 @@ async function loadAccounts() {
         sel.innerHTML = '<option value="">Select account...</option>' + (d.accounts || []).map(a =>
             `<option value="${a.account_id}">${a.username || a.account_id}</option>`
         ).join('');
-        sel.addEventListener('change', loadWarmupStatus);
         return d.accounts || [];
     } catch (e) {
         console.error(e);
+        document.getElementById('warmup-error').textContent = 'Failed to load accounts: ' + (e.message || 'Check console');
+        document.getElementById('warmup-error').style.display = 'block';
         return [];
     }
 }
@@ -311,8 +332,47 @@ document.getElementById('run-automation-now-btn').addEventListener('click', asyn
     const accountId = document.getElementById('warmup-account').value;
     if (!accountId) { alert('Select an account'); return; }
     const btn = document.getElementById('run-automation-now-btn');
+    const progressEl = document.getElementById('warmup-live-progress');
+    const msgEl = document.getElementById('live-progress-message');
+    const statsEl = document.getElementById('live-progress-stats');
     btn.disabled = true;
     btn.textContent = 'Running...';
+    progressEl.style.display = 'block';
+    msgEl.textContent = 'Starting...';
+    statsEl.textContent = '';
+
+    let pollInterval = setInterval(async () => {
+        try {
+            const r = await fetch('/api/warmup/run-status?account_id=' + encodeURIComponent(accountId), { credentials: 'include' });
+            const p = await r.json();
+            if (p.message) msgEl.textContent = p.message;
+            const parts = [];
+            if ((p.actions || 0) > 0) parts.push(p.actions + ' action(s)');
+            if ((p.errors || 0) > 0) parts.push(p.errors + ' error(s)');
+            if (p.tasks_done && p.tasks_done.length) parts.push('Tasks: ' + p.tasks_done.join(', '));
+            statsEl.textContent = parts.join(' · ');
+        } catch (_) {}
+    }, 2000);
+
+    const stopBtn = document.getElementById('stop-warmup-btn');
+    if (stopBtn) {
+        stopBtn.onclick = async () => {
+            stopBtn.disabled = true;
+            stopBtn.textContent = 'Stopping...';
+            try {
+                await fetch('/api/warmup/stop', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ account_id: accountId }),
+                });
+                msgEl.textContent = 'Stop requested. Run will stop after current action.';
+            } catch (e) {
+                msgEl.textContent = 'Failed to send stop: ' + (e.message || '');
+            }
+        };
+    }
+
     const abort = new AbortController();
     const timeoutId = setTimeout(() => abort.abort(), 190000);
     try {
@@ -336,24 +396,25 @@ document.getElementById('run-automation-now-btn').addEventListener('click', asyn
             msg = d.result?.message || '';
         }
         const actions = d.result?.actions ?? 0;
-        if (actions === 0 && !(msg && String(msg).trim())) {
-            msg = 'No reason reported. Ensure the app was restarted after the latest update and try again. Check server logs if it persists.';
-        }
-        const text = msg
-            ? 'Automation ran. Actions: ' + actions + '\n\n' + msg
-            : 'Automation ran. Actions: ' + actions;
-        alert(text);
+        msgEl.textContent = msg || ('Done! ' + actions + ' action(s).');
+        statsEl.textContent = (actions > 0 ? actions + ' action(s) · ' : '') + (msg || '');
         loadWarmupStatus();
+        setTimeout(() => { progressEl.style.display = 'none'; }, 8000);
     } catch (e) {
         if (e.name === 'AbortError') {
-            alert('Request timed out after about 3 minutes. The automation may still be running on the server. The button has been reset.');
+            msgEl.textContent = 'Timed out. The automation may still be running on the server. Use Stop Warmup to cancel it.';
         } else {
-            alert('Error: ' + (e.message || String(e)));
+            msgEl.textContent = 'Error: ' + (e.message || String(e));
         }
     } finally {
+        clearInterval(pollInterval);
         clearTimeout(timeoutId);
         btn.disabled = false;
         btn.textContent = 'Run automation now';
+        if (stopBtn) {
+            stopBtn.disabled = false;
+            stopBtn.textContent = 'Stop Warmup';
+        }
     }
 });
 
@@ -387,6 +448,7 @@ document.getElementById('refresh-warmup').addEventListener('click', () => {
 
 document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('warmup-content').style.display = 'block';
+    document.getElementById('warmup-account').addEventListener('change', loadWarmupStatus);
     await loadAccounts();
     const accountId = document.getElementById('warmup-account').value;
     if (accountId) loadWarmupStatus();

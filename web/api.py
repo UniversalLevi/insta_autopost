@@ -1466,13 +1466,12 @@ async def warmup_start(
     current_user: User = Depends(require_auth),
 ):
     """Start a 5-day warm-up for an account."""
-    from src.features.warmup.warmup_engine import WarmupEngine
+    from src.features.warmup.engine import start_warmup
     account_id = body.get("account_id")
     if not account_id:
         raise HTTPException(status_code=400, detail="account_id required")
     try:
-        engine = WarmupEngine()
-        plan = engine.start_warmup(account_id, instagram_id=body.get("instagram_id"))
+        plan = start_warmup(account_id, instagram_id=body.get("instagram_id"))
         return {"status": "success", "plan": plan, "message": "Warm-up started"}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -1487,16 +1486,15 @@ async def warmup_status(
     current_user: User = Depends(require_auth),
 ):
     """Get warm-up status and today's plan for an account."""
-    from src.features.warmup.warmup_store import get_warmup_plan
-    from src.features.warmup.warmup_engine import WarmupEngine
-    plan = get_warmup_plan(account_id)
+    from src.features.warmup.store import get_plan
+    from src.features.warmup.engine import get_today_plan
+    plan = get_plan(account_id)
     if not plan:
         return {"plan": None, "tasks": []}
-    engine = WarmupEngine()
-    today = engine.get_today_plan(account_id)
+    today = get_today_plan(account_id)
     if not today:
-        return {"plan": plan, "tasks": []}
-    return {"plan": plan, "tasks": today.get("tasks", [])}
+        return {"plan": plan.to_dict(), "tasks": []}
+    return {"plan": plan.to_dict(), "tasks": today.get("tasks", [])}
 
 
 @router.post("/warmup/complete-task")
@@ -1505,14 +1503,13 @@ async def warmup_complete_task(
     current_user: User = Depends(require_auth),
 ):
     """Mark a task as done."""
-    from src.features.warmup.warmup_engine import WarmupEngine
+    from src.features.warmup.engine import mark_task_done
     account_id = body.get("account_id")
     task_id = body.get("task_id")
     count = body.get("count", 1)
     if not account_id or not task_id:
         raise HTTPException(status_code=400, detail="account_id and task_id required")
-    engine = WarmupEngine()
-    updated = engine.mark_task_done(account_id, task_id, count=count)
+    updated = mark_task_done(account_id, task_id, count=count)
     if not updated:
         raise HTTPException(status_code=404, detail="Plan not found or not active")
     return {"status": "success", "plan": updated}
@@ -1524,23 +1521,21 @@ async def warmup_complete_day(
     current_user: User = Depends(require_auth),
 ):
     """Mark current day complete and advance (or finish on Day 5)."""
-    from src.features.warmup.warmup_engine import WarmupEngine
-    from src.features.warmup.warmup_store import get_warmup_plan, save_warmup_report
+    from src.features.warmup.engine import complete_day
+    from src.features.warmup.store import get_plan, save_warmup_report
     account_id = body.get("account_id")
     if not account_id:
         raise HTTPException(status_code=400, detail="account_id required")
-    engine = WarmupEngine()
-    plan = get_warmup_plan(account_id)
-    updated = engine.complete_day(account_id)
+    plan = get_plan(account_id)
+    updated = complete_day(account_id)
     if not updated:
         raise HTTPException(status_code=404, detail="Plan not found or not active")
     # If finished (Day 5), save report
-    if updated.get("status") == "completed":
-        from datetime import datetime
+    if updated.get("status") == "completed" and plan:
         save_warmup_report({
             "account_id": account_id,
             "completed_at": datetime.utcnow().isoformat(),
-            "start_date": plan.get("start_date"),
+            "start_date": plan.start_date,
             "engagement_change": "N/A",
             "reach_improvement": "N/A",
             "account_health": "Ready for automation",
@@ -1556,13 +1551,12 @@ async def warmup_pause(
     current_user: User = Depends(require_auth),
 ):
     """Pause warm-up."""
-    from src.features.warmup.warmup_engine import WarmupEngine
+    from src.features.warmup.engine import pause_warmup
     account_id = body.get("account_id")
     reason = body.get("reason", "Paused by user")
     if not account_id:
         raise HTTPException(status_code=400, detail="account_id required")
-    engine = WarmupEngine()
-    updated = engine.pause_warmup(account_id, reason)
+    updated = pause_warmup(account_id, reason)
     if not updated:
         raise HTTPException(status_code=404, detail="Plan not found")
     return {"status": "success", "plan": updated}
@@ -1574,12 +1568,11 @@ async def warmup_resume(
     current_user: User = Depends(require_auth),
 ):
     """Resume a paused warm-up."""
-    from src.features.warmup.warmup_engine import WarmupEngine
+    from src.features.warmup.engine import resume_warmup
     account_id = body.get("account_id")
     if not account_id:
         raise HTTPException(status_code=400, detail="account_id required")
-    engine = WarmupEngine()
-    updated = engine.resume_warmup(account_id)
+    updated = resume_warmup(account_id)
     if not updated:
         raise HTTPException(status_code=404, detail="Plan not found or not paused")
     return {"status": "success", "plan": updated}
@@ -1591,8 +1584,8 @@ async def get_warmup_automation_config(
     current_user: User = Depends(require_auth),
 ):
     """Get warm-up automation config for an account."""
-    from src.features.warmup.warmup_automation_config import get_config
-    return get_config(account_id)
+    from src.features.warmup.config import get_automation_config
+    return get_automation_config(account_id)
 
 
 @router.put("/warmup/automation-config")
@@ -1601,13 +1594,40 @@ async def update_warmup_automation_config(
     current_user: User = Depends(require_auth),
 ):
     """Update warm-up automation config."""
-    from src.features.warmup.warmup_automation_config import set_config
+    from src.features.warmup.store import set_config
     account_id = body.get("account_id")
     if not account_id:
         raise HTTPException(status_code=400, detail="account_id required")
     updates = {k: v for k, v in body.items() if k in ("automation_enabled", "target_hashtags", "schedule_times")}
     cfg = set_config(account_id, updates)
-    return {"status": "success", "config": cfg}
+    return {"status": "success", "config": cfg.to_dict()}
+
+
+@router.get("/warmup/run-status")
+async def get_warmup_run_status(
+    account_id: str,
+    current_user: User = Depends(require_auth),
+):
+    """Get real-time progress of an in-progress or last warm-up automation run."""
+    from src.features.warmup.progress import get_progress
+    prog = get_progress(account_id)
+    if not prog:
+        return {"running": False, "message": None}
+    return {"running": prog.get("running", False), **prog}
+
+
+@router.post("/warmup/stop")
+async def stop_warmup_run(
+    body: dict,
+    current_user: User = Depends(require_auth),
+):
+    """Request stop of an in-progress warm-up automation run."""
+    from src.features.warmup.progress import request_stop
+    account_id = body.get("account_id")
+    if not account_id:
+        raise HTTPException(status_code=400, detail="account_id required")
+    request_stop(account_id)
+    return {"status": "success", "message": "Stop requested. The run will stop after the current action."}
 
 
 @router.post("/warmup/run-automation")
@@ -1617,24 +1637,26 @@ async def run_warmup_automation_now(
     current_user: User = Depends(require_auth),
 ):
     """Manually trigger warm-up automation for an account (runs in thread pool)."""
-    from src.features.warmup.warmup_automation import WarmupAutomation
+    from src.features.warmup.runner import run_one_cycle
+    from src.features.warmup.progress import set_progress
     from src.automation.browser.browser_wrapper import _close_thread_loop
     account_id = body.get("account_id")
     if not account_id:
         raise HTTPException(status_code=400, detail="account_id required")
-    automation = WarmupAutomation(
-        app.account_service,
-        getattr(app, "browser_wrapper", None),
-    )
+    set_progress(account_id, "starting", "Starting warm-up automation...")
 
     def _run():
         try:
-            return automation.run_for_account(account_id)
+            return run_one_cycle(
+                account_id,
+                app.account_service,
+                getattr(app, "browser_wrapper", None),
+            )
         finally:
             _close_thread_loop()
 
     try:
-        result = await asyncio.wait_for(run_in_threadpool(_run), timeout=180.0)
+        result = await asyncio.wait_for(run_in_threadpool(_run), timeout=300.0)
     except asyncio.TimeoutError:
         result = {
             "account_id": account_id,
@@ -1642,7 +1664,7 @@ async def run_warmup_automation_now(
             "errors": 0,
             "tasks_done": [],
             "message": (
-                "Automation timed out after 3 minutes. The browser may still be busy. "
+                "Automation timed out after 5 minutes. The browser may still be busy. "
                 "Try again later or check server logs."
             ),
         }

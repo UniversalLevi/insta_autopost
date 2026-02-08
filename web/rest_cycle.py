@@ -24,7 +24,7 @@ def _stop_automation(app) -> None:
     """Stop all background automation (same as shutdown, but process keeps running)."""
     from .scheduled_publisher import stop_scheduled_publisher
     from .warming_scheduler import stop_warming_scheduler
-    from .warmup_automation_scheduler import stop_warmup_automation_scheduler
+    from src.features.warmup.scheduler import stop_scheduler as stop_warmup_automation_scheduler
     from src.services.token_refresher import stop_daily_token_refresh_job
 
     try:
@@ -59,7 +59,7 @@ def _start_automation(app) -> None:
     """Start all background automation again (same as startup when not in sleep mode)."""
     from .scheduled_publisher import start_scheduled_publisher
     from .warming_scheduler import start_warming_scheduler
-    from .warmup_automation_scheduler import start_warmup_automation_scheduler
+    from src.features.warmup.scheduler import start_scheduler as start_warmup_automation_scheduler
     from src.services.token_refresher import start_daily_token_refresh_job
     from .cron_config import SCHEDULED_PUBLISHER_INTERVAL_SECONDS, TOKEN_REFRESH_INTERVAL_SECONDS
 
