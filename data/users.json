@@ -23,6 +23,18 @@
       "created_by": null,
       "subscription_plan": "pro",
       "subscription_expires_at": null
+    },
+    {
+      "id": "931b16f0-41a6-4ca4-96fd-da9ec0454571",
+      "username": "Alpha",
+      "email": null,
+      "password_hash": "$2b$12$PxKA7vwltLH189dM9SX.Au8tbNSOa0CXvDvALbVf71iGAbxK0r4dC",
+      "role": "user",
+      "created_at": "2026-02-08T18:18:37.693267",
+      "is_active": true,
+      "created_by": null,
+      "subscription_plan": "pro",
+      "subscription_expires_at": null
     }
   ]
 }

@@ -55,3 +55,25 @@ accounts:
   instagram_business_id: null
   page_id: null
   user_access_token: null
+- account_id: '17841457878364664'
+  username: universal_levi
+  access_token: IGAAXIeneXrCxBZAGJ4R3ZA3c2k1ZAXlfME0wUVVnU1VKUk1WWEUzYjN4Nmh4RGlEZAUFWUXVXZAmxrcnZANSjFCVDhBWVFsLW9ZASWc2ZAm1QSHRfWE1NM3FVU3FrSFJFdU9kNXhwbXJfMTQ3VFEzZAkFuak90NXBVbE9FdkJfcmlEQ1d1OAZDZD
+  password: q1w2e3r4t5y6
+  proxy:
+    enabled: false
+    host: null
+    port: null
+    username: null
+    password: null
+  warming:
+    enabled: true
+    daily_actions: 10
+    action_types:
+    - like
+    - comment
+  comment_to_dm:
+    enabled: true
+    link_to_send: null
+  ai_dm:
+    enabled: true
+    auto_send: true
