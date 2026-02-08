@@ -15,6 +15,57 @@
     </div>
     <p class="schedule-tip">Tip: Set <strong>BASE_URL</strong> to your server (e.g. <code>https://yourdomain.com</code>) so scheduled posts use your server and run reliably.</p>
 
+    <div class="card schedule-new-card" style="margin-bottom: 24px;">
+        <h3 style="margin: 0 0 16px 0; color: var(--text-main);">Schedule New Post</h3>
+        <div class="form-group">
+            <label class="form-label">Account</label>
+            <select id="schedule-account" class="form-control">
+                <option value="">Loading...</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Media Type</label>
+            <select id="schedule-media-type" class="form-control">
+                <option value="image">Image</option>
+                <option value="video">Video</option>
+                <option value="reels">Reels</option>
+                <option value="carousel">Carousel</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label flex items-center gap-2" style="cursor: pointer;">
+                <input type="checkbox" id="schedule-by-url"> Use URL instead of upload
+            </label>
+        </div>
+        <div id="schedule-upload-section" class="form-group">
+            <label class="form-label">Upload Media</label>
+            <div id="schedule-drop-zone" class="upload-zone" style="min-height: 100px;">
+                <div class="upload-content">
+                    <span style="font-size: 1.5rem;">☁️</span>
+                    <p>Drag & drop or click to select</p>
+                </div>
+                <input type="file" id="schedule-file-input" class="hidden" multiple accept="image/*,video/*">
+            </div>
+            <div id="schedule-file-list" class="mt-2"></div>
+        </div>
+        <div id="schedule-url-section" class="form-group hidden">
+            <label class="form-label">Media URLs (one per line)</label>
+            <textarea id="schedule-urls" class="form-control" rows="2" placeholder="https://yourdomain.com/image.jpg"></textarea>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Caption</label>
+            <textarea id="schedule-caption" class="form-control" rows="3" placeholder="Caption..."></textarea>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Schedule Date & Time</label>
+            <input type="datetime-local" id="schedule-datetime" class="form-control" required>
+        </div>
+        <div class="form-group">
+            <button id="schedule-submit-btn" class="btn btn-primary" onclick="submitSchedulePost()">Schedule Post</button>
+        </div>
+        <div id="schedule-form-result" class="mt-2"></div>
+    </div>
+
     <div id="schedule-loading" class="loading" style="display: flex;">
         <div class="loading-spinner"></div>
         Loading schedule...
@@ -385,6 +436,213 @@ async function loadScheduleQueue() {
 }
 
 document.getElementById('refresh-queue').addEventListener('click', loadScheduleQueue);
+
+// ---- Schedule New Post form ----
+let scheduleUploadedFiles = [];
+
+async function loadScheduleAccounts() {
+    const sel = document.getElementById('schedule-account');
+    if (!sel) return;
+    try {
+        const r = await fetch('/api/config/accounts');
+        const d = await r.json();
+        sel.innerHTML = '';
+        if (!d.accounts || d.accounts.length === 0) {
+            sel.innerHTML = '<option value="">No accounts found</option>';
+            return;
+        }
+        d.accounts.forEach(acc => {
+            const opt = document.createElement('option');
+            opt.value = acc.account_id;
+            opt.textContent = acc.username || acc.account_id;
+            sel.appendChild(opt);
+        });
+    } catch (e) {
+        sel.innerHTML = '<option value="">Failed to load accounts</option>';
+    }
+}
+
+function setupScheduleForm() {
+    const byUrl = document.getElementById('schedule-by-url');
+    const uploadSection = document.getElementById('schedule-upload-section');
+    const urlSection = document.getElementById('schedule-url-section');
+    if (byUrl) {
+        byUrl.addEventListener('change', () => {
+            const useUrl = byUrl.checked;
+            uploadSection.classList.toggle('hidden', useUrl);
+            urlSection.classList.toggle('hidden', !useUrl);
+            if (useUrl) scheduleUploadedFiles = [];
+            updateScheduleFileList();
+        });
+    }
+
+    const dropZone = document.getElementById('schedule-drop-zone');
+    const fileInput = document.getElementById('schedule-file-input');
+    if (dropZone && fileInput) {
+        dropZone.onclick = () => fileInput.click();
+        dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('dragover'); };
+        dropZone.ondragleave = (e) => { e.preventDefault(); dropZone.classList.remove('dragover'); };
+        dropZone.ondrop = (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            handleScheduleFiles(e.dataTransfer.files);
+        };
+        fileInput.onchange = (e) => handleScheduleFiles(e.target.files || []);
+    }
+}
+
+function handleScheduleFiles(files) {
+    const arr = Array.from(files).filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
+    scheduleUploadedFiles = scheduleUploadedFiles.concat(arr);
+    updateScheduleFileList();
+}
+
+function updateScheduleFileList() {
+    const el = document.getElementById('schedule-file-list');
+    if (!el) return;
+    if (scheduleUploadedFiles.length === 0) {
+        el.innerHTML = '';
+        return;
+    }
+    el.innerHTML = scheduleUploadedFiles.map((f, i) =>
+        '<div class="flex items-center gap-2 p-2 bg-gray-50 border rounded" style="margin-bottom: 6px;">' +
+        '<span class="text-sm font-medium truncate flex-1">' + escapeHtml(f.name) + '</span>' +
+        '<span class="text-sm text-muted">' + (f.size / 1024 / 1024).toFixed(2) + ' MB</span>' +
+        '<button type="button" class="btn btn-danger btn-sm" onclick="removeScheduleFile(' + i + ')" style="padding: 0.25rem 0.5rem;">×</button></div>'
+    ).join('');
+}
+
+function removeScheduleFile(idx) {
+    scheduleUploadedFiles.splice(idx, 1);
+    updateScheduleFileList();
+}
+
+window.submitSchedulePost = async function () {
+    const accountSel = document.getElementById('schedule-account');
+    const mediaType = document.getElementById('schedule-media-type').value;
+    const byUrl = document.getElementById('schedule-by-url').checked;
+    const caption = (document.getElementById('schedule-caption').value || '').trim();
+    const dtInput = document.getElementById('schedule-datetime');
+    const resultEl = document.getElementById('schedule-form-result');
+    const btn = document.getElementById('schedule-submit-btn');
+
+    const accountId = accountSel ? accountSel.value : '';
+    if (!accountId) {
+        resultEl.textContent = 'Please select an account.';
+        resultEl.style.color = 'var(--primary)';
+        resultEl.style.display = 'block';
+        return;
+    }
+
+    const scheduledTime = dtInput ? dtInput.value : '';
+    if (!scheduledTime) {
+        resultEl.textContent = 'Please set a schedule date and time.';
+        resultEl.style.color = 'var(--primary)';
+        resultEl.style.display = 'block';
+        return;
+    }
+
+    let urls = [];
+    if (byUrl) {
+        const raw = (document.getElementById('schedule-urls').value || '').trim();
+        urls = raw.split(/\n/).map(s => s.trim()).filter(Boolean);
+        if (urls.length === 0) {
+            resultEl.textContent = 'Enter at least one media URL (one per line).';
+            resultEl.style.color = 'var(--primary)';
+            resultEl.style.display = 'block';
+            return;
+        }
+        if (mediaType === 'carousel' && urls.length < 2) {
+            resultEl.textContent = 'Carousel requires at least 2 URLs.';
+            resultEl.style.color = 'var(--primary)';
+            resultEl.style.display = 'block';
+            return;
+        }
+        if (mediaType !== 'carousel' && urls.length > 1) {
+            resultEl.textContent = 'Single ' + mediaType + ' post can only have 1 URL.';
+            resultEl.style.color = 'var(--primary)';
+            resultEl.style.display = 'block';
+            return;
+        }
+    } else {
+        if (scheduleUploadedFiles.length === 0) {
+            resultEl.textContent = 'Please upload media or use URLs.';
+            resultEl.style.color = 'var(--primary)';
+            resultEl.style.display = 'block';
+            return;
+        }
+        if (mediaType === 'carousel' && scheduleUploadedFiles.length < 2) {
+            resultEl.textContent = 'Carousel requires at least 2 files.';
+            resultEl.style.color = 'var(--primary)';
+            resultEl.style.display = 'block';
+            return;
+        }
+        if (mediaType !== 'carousel' && scheduleUploadedFiles.length > 1) {
+            resultEl.textContent = 'Single ' + mediaType + ' post can only have 1 file.';
+            resultEl.style.color = 'var(--primary)';
+            resultEl.style.display = 'block';
+            return;
+        }
+    }
+
+    resultEl.textContent = '';
+    resultEl.style.display = 'none';
+    btn.disabled = true;
+    btn.textContent = byUrl ? 'Scheduling...' : 'Uploading & scheduling...';
+
+    try {
+        if (!byUrl) {
+            const formData = new FormData();
+            scheduleUploadedFiles.forEach(f => formData.append('files', f));
+            const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
+            if (!uploadRes.ok) throw new Error('Upload failed');
+            const uploadData = await uploadRes.json();
+            urls = (uploadData.urls || []).map(u => u.url);
+        }
+
+        const scheduledIso = new Date(scheduledTime).toISOString();
+        const postData = {
+            account_id: accountId,
+            media_type: mediaType,
+            urls: urls,
+            caption: caption,
+            scheduled_time: scheduledIso
+        };
+
+        const postRes = await fetch('/api/posts/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(postData)
+        });
+
+        const postResult = await postRes.json().catch(() => ({}));
+
+        if (!postRes.ok) {
+            const msg = postResult.detail || (postResult.message || 'Failed to schedule post');
+            throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+        }
+
+        resultEl.textContent = 'Post scheduled successfully for ' + formatTime(scheduledIso) + '.';
+        resultEl.style.color = 'var(--text-main)';
+        resultEl.style.display = 'block';
+
+        scheduleUploadedFiles = [];
+        updateScheduleFileList();
+        document.getElementById('schedule-caption').value = '';
+        document.getElementById('schedule-urls').value = '';
+        loadScheduleQueue();
+    } catch (err) {
+        resultEl.textContent = 'Error: ' + (err.message || err);
+        resultEl.style.color = 'var(--primary)';
+        resultEl.style.display = 'block';
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Schedule Post';
+    }
+};
+
+loadScheduleAccounts();
+setupScheduleForm();
 
 // Retry and Cancel buttons (work for dynamically loaded list)
 document.addEventListener('click', async function (ev) {

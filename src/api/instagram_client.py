@@ -499,6 +499,40 @@ class InstagramClient:
                     error_code=error_code,
                     error_subcode=error_subcode,
                 )
+            # Aspect ratio error 36003 / 2207009: Media dimensions not supported by Instagram
+            if error_code == 36003 or error_subcode == 2207009:
+                media_type_name = params.get("media_type", "media")
+                if media_type_name == "REELS":
+                    aspect_help = (
+                        f"Reels require 9:16 aspect ratio (vertical), min 3 seconds, max 15 minutes, MP4/MOV.\n"
+                        f"Use 1080×1920 or 720×1280 for best results."
+                    )
+                elif media_type_name == "STORIES":
+                    aspect_help = (
+                        f"Stories require 9:16 aspect ratio (vertical).\n"
+                        f"Use 1080×1920 or 720×1280."
+                    )
+                elif media_type_name == "VIDEO":
+                    aspect_help = (
+                        f"Video posts: Use 1:1 (square) or 4:5 aspect ratio.\n"
+                        f"Avoid very wide (e.g. 16:9) or very tall formats."
+                    )
+                else:
+                    aspect_help = (
+                        f"Images: Use 1:1 (square), 4:5, or 1.91:1 aspect ratio.\n"
+                        f"Carousel items: Each image/video must follow supported aspect ratios."
+                    )
+                raise InstagramAPIError(
+                    f"The aspect ratio of your media is not supported by Instagram (error {error_code}/{error_subcode}).\n"
+                    f"\n"
+                    f"Supported formats:\n"
+                    f"{aspect_help}\n"
+                    f"\n"
+                    f"Resize or crop your media and try again.\n"
+                    f"Original error: {error_type}: {error_message}",
+                    error_code=error_code,
+                    error_subcode=error_subcode,
+                )
             raise
         except Exception as e:
             # Catch any other unexpected exceptions

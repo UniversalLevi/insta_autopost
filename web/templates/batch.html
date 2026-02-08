@@ -1,0 +1,78 @@
+{% extends "layout.html" %}
+
+{% block title %}Batch Upload - InstaForge{% endblock %}
+{% block page_title %}Batch Upload (30 Days){% endblock %}
+
+{% block content %}
+<div class="batch-page" style="padding: 20px;">
+    <p class="text-muted" style="margin-bottom: 1.5rem;">Upload multiple media files or a ZIP file to automatically schedule them as daily posts.</p>
+    <p class="text-sm text-muted" style="margin-bottom: 1.5rem;">Set <strong>BASE_URL</strong> to your server (e.g. <code>https://yourdomain.com</code>) so scheduled posts use your server reliably.</p>
+
+    <div class="card" style="margin-bottom: 24px;">
+        <div class="form-group">
+            <label class="form-label">Select Account</label>
+            <select id="batch-account-select" class="form-control">
+                <option value="">Loading accounts...</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Upload Method</label>
+            <div class="flex gap-2" id="batch-upload-method-buttons">
+                <button type="button" class="btn btn-primary" data-method="files" onclick="setBatchUploadMethod('files')">Multiple Files</button>
+                <button type="button" class="btn btn-secondary" data-method="zip" onclick="setBatchUploadMethod('zip')">ZIP File</button>
+            </div>
+            <input type="hidden" id="batch-upload-method" value="files">
+        </div>
+        <div id="batch-files-section" class="form-group">
+            <label class="form-label">Select Media Files (Max 31 files)</label>
+            <div id="batch-drop-zone" class="upload-zone">
+                <div class="upload-content">
+                    <span class="icon" style="font-size: 2rem;">📦</span>
+                    <p>Drag & drop multiple files here or click to select</p>
+                    <div class="text-sm text-muted">JPG, PNG, WEBP, MP4, MOV, AVI, MKV, WEBM (Max 31 files, 100MB each)</div>
+                </div>
+                <input type="file" id="batch-file-input" class="hidden" multiple accept="image/*,video/*">
+            </div>
+            <div id="batch-file-list" class="flex flex-col gap-2 mt-4"></div>
+        </div>
+        <div id="batch-zip-section" class="form-group hidden">
+            <label class="form-label">Upload ZIP File</label>
+            <div id="batch-zip-drop-zone" class="upload-zone">
+                <div class="upload-content">
+                    <span class="icon" style="font-size: 2rem;">📁</span>
+                    <p>Drag & drop ZIP file here or click to select</p>
+                    <div class="text-sm text-muted">ZIP containing JPG, PNG, WEBP, MP4, MOV, AVI, MKV, WEBM files (Max 31 total)</div>
+                </div>
+                <input type="file" id="batch-zip-input" class="hidden" accept=".zip">
+            </div>
+            <div id="batch-zip-info" class="mt-2"></div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Start Date</label>
+            <input type="datetime-local" id="batch-start-date" class="form-control" required>
+            <div class="text-sm text-muted">First post will be scheduled for this date</div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">End Date (Optional)</label>
+            <input type="datetime-local" id="batch-end-date" class="form-control">
+            <div class="text-sm text-muted">If provided, files are distributed across the date range. Otherwise, daily from start date.</div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Caption (Optional)</label>
+            <textarea id="batch-caption" class="form-control" rows="3" placeholder="Caption for all posts..."></textarea>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Hashtags (Optional)</label>
+            <input type="text" id="batch-hashtags" class="form-control" placeholder="#hashtag1 #hashtag2">
+        </div>
+        <div class="form-group">
+            <button id="batch-submit-btn" class="btn btn-primary w-full" onclick="submitBatchUpload()">Schedule Batch Campaign</button>
+        </div>
+        <div id="batch-result" class="mt-4"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/batch.js"></script>
+{% endblock %}

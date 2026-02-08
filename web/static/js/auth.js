@@ -1,7 +1,8 @@
-// Authentication functions for InstaForge
-
-const API_BASE = '/api';
-const AUTH_BASE = '/auth';
+// Authentication functions for InstaForge (var allows safe redeclaration if script loaded twice)
+var API_BASE = window.API_BASE || '/api';
+var AUTH_BASE = window.AUTH_BASE || '/auth';
+window.API_BASE = API_BASE;
+window.AUTH_BASE = AUTH_BASE;
 
 // Get session token from localStorage or cookie
 function getSessionToken() {

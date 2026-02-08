@@ -52,6 +52,7 @@ app.add_middleware(
 
 # Authentication middleware (raw ASGI to avoid BaseHTTPMiddleware CancelledError on client disconnect)
 PUBLIC_ROUTES = {
+    "/favicon.ico",
     "/login",
     "/register",
     "/pricing",
@@ -647,6 +648,13 @@ async def _get_user_from_request(request: Request):
     return await run_in_threadpool(validate_session, token) if token else None
 
 
+@app.get("/favicon.ico")
+async def favicon():
+    """Serve favicon to avoid 404 when browsers request it."""
+    from fastapi.responses import Response
+    svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🚀</text></svg>'
+    return Response(content=svg.encode("utf-8"), media_type="image/svg+xml")
+
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     """Main posting page (user only; admin redirected to /users)"""
@@ -664,6 +672,16 @@ async def schedule_page(request: Request):
     if user and user.role == "admin":
         return RedirectResponse(url="/users", status_code=302)
     content = await render_template_async("schedule.html", {"request": request})
+    return HTMLResponse(content=content)
+
+
+@app.get("/batch", response_class=HTMLResponse)
+async def batch_page(request: Request):
+    """Batch upload page (user only)"""
+    user = await _get_user_from_request(request)
+    if user and user.role == "admin":
+        return RedirectResponse(url="/users", status_code=302)
+    content = await render_template_async("batch.html", {"request": request})
     return HTMLResponse(content=content)
 
 
