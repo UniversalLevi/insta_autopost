@@ -239,6 +239,7 @@ class PostingService:
                 # Check status and wait if needed
                 max_wait = 60  # Maximum 60 seconds
                 waited = 0
+                first_error_status = None  # for one retry and logging
                 while waited < max_wait:
                     status = client.get_media_status(container_id)
                     status_code = status.get("status_code")
@@ -246,17 +247,31 @@ class PostingService:
                         logger.info("Video/reels container ready", container_id=container_id)
                         break
                     elif status_code == "ERROR":
-                        # status field may contain error detail; API sometimes returns generic ERROR
+                        if first_error_status is None:
+                            first_error_status = status
+                            # Retry once: Instagram sometimes needs more time to fetch/process
+                            logger.warning(
+                                "Video/reels container ERROR, retrying once in 15s",
+                                container_id=container_id,
+                                status_response=status,
+                            )
+                            time.sleep(15)
+                            continue
+                        # Second ERROR: build helpful message
                         error_msg = (
-                            status.get("status")
-                            or status.get("error_message")
+                            status.get("error_message")
+                            or status.get("status")
                             or status.get("message")
                         )
                         if not error_msg or str(error_msg).strip().upper() == "ERROR":
+                            media_url = getattr(post.media, "url", None) or "(see logs)"
                             error_msg = (
                                 "Instagram could not process the video. "
-                                "Ensure the media URL is public, HTTPS, and returns the correct Content-Type. "
-                                "Try setting BASE_URL to your public domain and re-uploading."
+                                "Check: 1) URL is public HTTPS and returns video/mp4 (open in browser). "
+                                "2) If using Cloudflare: disable Bot Fight Mode or allowlist Instagram crawler for /uploads/. "
+                                "3) If using a WAF/firewall: allow requests to /uploads/ from Meta IPs. "
+                                "4) Video must be MP4 with H.264 video and AAC audio. "
+                                f"5) BASE_URL is set to your public domain. Media URL: {media_url}"
                             )
                         else:
                             error_msg = str(error_msg).strip()

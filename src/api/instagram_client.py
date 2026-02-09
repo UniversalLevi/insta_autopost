@@ -785,10 +785,10 @@ class InstagramClient:
         return response["id"]
     
     def get_media_status(self, container_id: str) -> Dict[str, Any]:
-        """Check the status of a media container (status_code and status for error details)."""
+        """Check the status of a media container (status_code, status, error_message for error details)."""
         return self._make_request(
             "GET", f"{container_id}",
-            params={"fields": "status_code,status"},
+            params={"fields": "status_code,status,error_message"},
         )
     
     @retry(

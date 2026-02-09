@@ -140,6 +140,35 @@ comment_to_dm:
 
 ---
 
+## Troubleshooting
+
+### Video/Reel returns ERROR on production
+
+If the app creates the media container but Instagram returns **ERROR** when processing the video URL (e.g. "Video/reels processing failed"), try the following:
+
+1. **URL reachable by Instagram**  
+   Open the media URL in a browser (e.g. `https://yourdomain.com/uploads/xxx.mp4`). It must return the file with `Content-Type: video/mp4` and no login/redirect. If you see HTML or 404, fix your server or `BASE_URL`.
+
+2. **Cloudflare (if used)**  
+   Bot Fight Mode or WAF can block Instagram’s crawler. Either disable Bot Fight Mode or add a rule to allow/allowlist requests to `/uploads/*` (or allow the User-Agent `facebookexternalhit/1.1`).
+
+3. **Firewall / WAF**  
+   Ensure Meta’s IPs can GET your upload URLs. Blocking bot/crawler traffic to `/uploads/` will cause ERROR.
+
+4. **Video format**  
+   Instagram requires **MP4** with **H.264** video and **AAC** audio. Re-encode with e.g.:
+   ```bash
+   ffmpeg -i input.mp4 -c:v libx264 -c:a aac -movflags +faststart output.mp4
+   ```
+
+5. **BASE_URL**  
+   Set `BASE_URL` (or `APP_URL`) to your public HTTPS domain (e.g. `https://veilforce.com`) so upload URLs point to a location Instagram can reach.
+
+6. **Nginx/Apache**  
+   If you proxy to the app, ensure `/uploads/` is proxied to the app and that no extra rules block or alter requests to that path.
+
+---
+
 ## Support
 
 - Check logs via Dashboard > Logs
