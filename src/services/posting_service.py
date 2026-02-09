@@ -236,13 +236,19 @@ class PostingService:
                 wait_time = 10
                 time.sleep(wait_time)
                 
-                # Check status and wait if needed
-                max_wait = 60  # Maximum 60 seconds
+                # Check status and wait if needed (large videos can take 90s+ to process)
+                max_wait = 120  # Maximum 120 seconds for video/reels
                 waited = 0
                 first_error_status = None  # for one retry and logging
                 while waited < max_wait:
                     status = client.get_media_status(container_id)
                     status_code = status.get("status_code")
+                    logger.info(
+                        "Video/reels container status",
+                        container_id=container_id,
+                        status_code=status_code,
+                        waited_seconds=waited,
+                    )
                     if status_code == "FINISHED":
                         logger.info("Video/reels container ready", container_id=container_id)
                         break

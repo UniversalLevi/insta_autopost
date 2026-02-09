@@ -280,7 +280,8 @@ async function submitPost() {
         let successCount = 0;
         let errors = [];
 
-        const POST_TIMEOUT_MS = 180000;
+        // Video/reels can take 2+ min for Instagram to process; use 5 min so we don't abort early
+        const POST_TIMEOUT_MS = 300000;
 
         for (const accountId of selectedAccounts) {
             try {
