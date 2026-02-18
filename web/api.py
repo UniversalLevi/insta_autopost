@@ -796,108 +796,13 @@ async def deactivate_user(
         raise HTTPException(status_code=500, detail=f"Failed to deactivate user: {str(e)}")
 
 
-# --- Subscription / Razorpay Payment Endpoints ---
+# --- Subscription plans (display only; no payments) ---
 
 @router.get("/plans")
 async def list_plans():
-    """List all subscription plans (public)."""
+    """List subscription plan info (all features free; no payment)."""
     from src.services.subscription_plans import PLAN_LIMITS
-
     return {"plans": PLAN_LIMITS}
-
-
-class CreateOrderRequest(BaseModel):
-    plan: str  # starter, pro
-
-
-@router.post("/payments/create-order")
-async def create_payment_order(
-    body: CreateOrderRequest,
-    current_user: User = Depends(require_auth),
-):
-    """Create Razorpay order for subscription upgrade."""
-    from web.razorpay_helper import create_order, is_razorpay_configured
-    from src.services.subscription_plans import RAZORPAY_AMOUNTS, PLAN_STARTER, PLAN_PRO
-
-    if not is_razorpay_configured():
-        raise HTTPException(status_code=503, detail="Payments are not configured")
-
-    if body.plan not in (PLAN_STARTER, PLAN_PRO):
-        raise HTTPException(status_code=400, detail="Invalid plan")
-
-    amount_paise = RAZORPAY_AMOUNTS.get(body.plan, 0)
-    receipt = f"sub_{current_user.id}_{body.plan}_{uuid.uuid4().hex[:8]}"
-    notes = {"user_id": current_user.id, "plan": body.plan}
-
-    order = create_order(amount_paise=amount_paise, currency="INR", receipt=receipt, notes=notes)
-    if not order:
-        raise HTTPException(status_code=500, detail="Failed to create order")
-
-    return {"order": order, "plan": body.plan}
-
-
-class VerifyPaymentRequest(BaseModel):
-    order_id: str
-    payment_id: str
-    signature: str
-    plan: str
-
-
-@router.post("/payments/verify")
-async def verify_payment(
-    body: VerifyPaymentRequest,
-    current_user: User = Depends(require_auth),
-):
-    """Verify Razorpay payment and upgrade user plan."""
-    from web.razorpay_helper import verify_payment_signature
-    from src.services.subscription_plans import PLAN_STARTER, PLAN_PRO
-    from datetime import datetime, timedelta
-
-    if body.plan not in (PLAN_STARTER, PLAN_PRO):
-        raise HTTPException(status_code=400, detail="Invalid plan")
-
-    if not verify_payment_signature(body.order_id, body.payment_id, body.signature):
-        raise HTTPException(status_code=400, detail="Payment verification failed")
-
-    expires_at = (datetime.utcnow() + timedelta(days=365)).isoformat()
-    user_store.update_user(current_user.id, subscription_plan=body.plan, subscription_expires_at=expires_at)
-
-    return {"status": "success", "plan": body.plan, "subscription_expires_at": expires_at}
-
-
-@router.post("/payments/webhook")
-async def razorpay_webhook(request: Request):
-    """Razorpay webhook (no auth; signature verified)."""
-    from web.razorpay_helper import verify_webhook_signature
-    from src.services.subscription_plans import PLAN_STARTER, PLAN_PRO
-    from datetime import datetime, timedelta
-
-    body_bytes = await request.body()
-    signature = request.headers.get("X-Razorpay-Signature", "")
-
-    if not verify_webhook_signature(body_bytes, signature):
-        raise HTTPException(status_code=400, detail="Invalid webhook signature")
-
-    try:
-        payload = json.loads(body_bytes)
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=400, detail="Invalid JSON")
-
-    event = payload.get("event", "")
-    if event != "payment.captured":
-        return JSONResponse(content={"status": "ok"})
-
-    payment = payload.get("payload", {}).get("payment", {}).get("entity", {})
-    notes = payment.get("notes", {})
-    user_id = notes.get("user_id")
-    plan = notes.get("plan")
-
-    if user_id and plan in (PLAN_STARTER, PLAN_PRO):
-        expires_at = (datetime.utcnow() + timedelta(days=365)).isoformat()
-        user_store.update_user(user_id, subscription_plan=plan, subscription_expires_at=expires_at)
-        logger.info("Razorpay webhook: upgraded user", user_id=user_id, plan=plan)
-
-    return JSONResponse(content={"status": "ok"})
 
 
 # --- Account Management Endpoints ---
@@ -948,14 +853,6 @@ async def add_account(
     try:
         accounts = config_manager.load_accounts()
 
-        # Plan limit: account count (admins bypass)
-        if current_user.role != "admin":
-            from src.services.subscription_plans import can_use_feature
-            user_accounts = [a for a in accounts if getattr(a, "owner_id", None) == current_user.id]
-            plan = _get_user_plan(current_user)
-            if not can_use_feature(plan, "accounts", len(user_accounts)):
-                raise HTTPException(status_code=403, detail="Account limit reached. Upgrade your plan at /pricing")
-        
         # Check for duplicate ID
         if any(acc.account_id == account.account_id for acc in accounts):
             raise HTTPException(status_code=400, detail=f"Account ID {account.account_id} already exists")
@@ -1108,12 +1005,6 @@ async def create_post(
 ):
     """Create a new post"""
     try:
-        # Plan limit: comment-to-DM (auto DM) - free plan has no access
-        if post_data.auto_dm_enabled and current_user.role != "admin":
-            from src.services.subscription_plans import can_use_feature
-            plan = _get_user_plan(current_user)
-            if not can_use_feature(plan, "comment_to_dm"):
-                raise HTTPException(status_code=403, detail="Auto-DM requires Starter or Pro plan. Upgrade at /pricing")
         # Keep reels as reels (don't convert to video - Instagram API needs REELS type)
         media_type = post_data.media_type
         
@@ -1826,13 +1717,6 @@ async def batch_upload(
     Accepts either multiple files OR a ZIP file.
     """
     try:
-        # Plan limit: batch upload (admins bypass)
-        if current_user.role != "admin":
-            from src.services.subscription_plans import can_use_feature
-            plan = _get_user_plan(current_user)
-            if not can_use_feature(plan, "batch_upload"):
-                raise HTTPException(status_code=403, detail="Batch upload requires Starter or Pro plan. Upgrade at /pricing")
-
         from .cloudflare_helper import get_base_url
         base_url = get_base_url(str(request.base_url), request.headers if request else None)
         
@@ -1944,18 +1828,6 @@ async def batch_upload(
         if len(valid_files) == 0:
             raise HTTPException(status_code=400, detail="No valid files found after validation")
 
-        # Plan limit: file count (admins bypass)
-        if current_user.role != "admin":
-            from src.services.subscription_plans import can_use_feature
-            plan = _get_user_plan(current_user)
-            if not can_use_feature(plan, "batch_upload_files", len(valid_files)):
-                from src.services.subscription_plans import get_plan_limits
-                limit = get_plan_limits(plan).get("batch_upload_max_files", 0)
-                for f in valid_files:
-                    if hasattr(f, "exists") and f.exists():
-                        f.unlink()
-                raise HTTPException(status_code=403, detail=f"Your plan allows max {limit} files per batch. Upgrade at /pricing")
-        
         if len(valid_files) > MAX_FILES_PER_CAMPAIGN:
             # Clean up files
             for f in valid_files:
@@ -2704,11 +2576,6 @@ async def update_comment_to_dm_config(
 ):
     """Update comment-to-DM config"""
     try:
-        if current_user.role != "admin":
-            from src.services.subscription_plans import can_use_feature
-            plan = _get_user_plan(current_user)
-            if not can_use_feature(plan, "comment_to_dm"):
-                raise HTTPException(status_code=403, detail="Comment-to-DM requires Starter or Pro plan. Upgrade at /pricing")
         body = await request.json()
         accounts = config_manager.load_accounts()
         

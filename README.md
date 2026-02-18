@@ -105,9 +105,6 @@ insta_autopost/
 | `META_APP_SECRET` | Meta App Secret |
 | `OPENAI_API_KEY` | For AI DM features |
 | `WEBHOOK_VERIFY_TOKEN` | Token for Instagram webhook verification |
-| `RAZORPAY_KEY_ID` | Razorpay key for payments |
-| `RAZORPAY_KEY_SECRET` | Razorpay secret |
-| `RAZORPAY_WEBHOOK_SECRET` | For Razorpay webhook verification |
 | `ENVIRONMENT` | `development` or `production` |
 
 ### Render

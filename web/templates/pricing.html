@@ -3,30 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pricing | InstaForge</title>
+    <title>Plans | InstaForge</title>
     <link rel="stylesheet" href="/static/css/style.css">
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="pricing-page">
         <div class="pricing-header">
-            <h1>InstaForge Plans</h1>
-            <p>Choose the plan that fits your Instagram automation needs</p>
+            <h1>InstaForge – All Features Free</h1>
+            <p>Everything is available to everyone. No payments, no limits.</p>
         </div>
 
         <div class="pricing-grid" id="pricing-grid">
             <div class="text-muted">Loading plans...</div>
         </div>
 
-        <div id="upgrade-result" class="auth-message" style="display: none; max-width: 400px;"></div>
-
         <div class="auth-link" style="margin-top: 1.5rem;">
-            <a href="/login">Back to Sign in</a>
+            <a href="/">Back to Dashboard</a>
+            <span style="margin: 0 0.5rem;">|</span>
+            <a href="/login">Sign in</a>
         </div>
     </div>
 
-    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-    <script src="/static/js/auth.js"></script>
     <script>
         async function loadPlans() {
             const res = await fetch('/api/plans', { credentials: 'include' });
@@ -41,12 +39,12 @@
                 if (!p) return;
                 const card = document.createElement('div');
                 card.className = 'pricing-card' + (key === 'starter' ? ' featured' : '');
-                const accounts = p.accounts === -1 ? 'Unlimited' : p.accounts;
+                const accounts = p.accounts === -1 || p.accounts >= 999 ? 'Unlimited' : p.accounts;
                 const scheduled = p.scheduled_posts_per_month === -1 ? 'Unlimited' : p.scheduled_posts_per_month;
-                const batch = p.batch_upload ? `${p.batch_upload_max_files} files` : 'No';
+                const batch = p.batch_upload ? (p.batch_upload_max_files >= 999 ? 'Unlimited' : p.batch_upload_max_files + ' files') : 'No';
                 card.innerHTML = `
                     <h2>${planLabels[key] || p.name}</h2>
-                    <div class="price">${p.price_display || ('Rs ' + p.price)}</div>
+                    <div class="price">${p.price_display || 'Free'}</div>
                     <ul>
                         <li>${accounts} account(s)</li>
                         <li>${scheduled} scheduled posts/month</li>
@@ -55,75 +53,11 @@
                         <li>Warm-up: ${p.warmup_automation ? 'Yes' : 'No'}</li>
                         <li>Comment-to-DM: ${p.comment_to_dm ? 'Yes' : 'No'}</li>
                     </ul>
-                    ${key === 'free' ? '<button class="btn btn-secondary" disabled>Current</button>' :
-                      '<button class="btn btn-primary" onclick="upgrade(\'' + key + '\')">Upgrade</button>'}
+                    <span class="badge badge-success">Included</span>
                 `;
                 grid.appendChild(card);
             });
         }
-
-        async function upgrade(plan) {
-            const resultEl = document.getElementById('upgrade-result');
-            resultEl.className = 'auth-message';
-            resultEl.style.display = 'none';
-            try {
-                const user = await getCurrentUser();
-                if (!user) {
-                    window.location.href = '/login?redirect=/pricing';
-                    return;
-                }
-                const orderRes = await fetch('/api/payments/create-order', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({ plan })
-                });
-                const orderData = await orderRes.json();
-                if (!orderData.order || !orderData.order.id) {
-                    throw new Error(orderData.detail || 'Failed to create order');
-                }
-                const options = {
-                    key: orderData.order.key_id,
-                    amount: orderData.order.amount,
-                    currency: orderData.order.currency,
-                    order_id: orderData.order.id,
-                    name: 'InstaForge',
-                    description: plan.toUpperCase() + ' Plan',
-                    handler: async function(response) {
-                        try {
-                            const verifyRes = await fetch('/api/payments/verify', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                credentials: 'include',
-                                body: JSON.stringify({
-                                    order_id: response.razorpay_order_id,
-                                    payment_id: response.razorpay_payment_id,
-                                    signature: response.razorpay_signature,
-                                    plan
-                                })
-                            });
-                            const verifyData = await verifyRes.json();
-                            if (verifyData.status === 'success') {
-                                resultEl.textContent = 'Upgrade successful! Redirecting...';
-                                resultEl.className = 'auth-message success';
-                                resultEl.style.display = 'block';
-                                setTimeout(() => { window.location.href = '/'; }, 1500);
-                            } else throw new Error(verifyData.detail || 'Verification failed');
-                        } catch (e) {
-                            resultEl.textContent = e.message || 'Verification failed';
-                            resultEl.className = 'auth-message error';
-                            resultEl.style.display = 'block';
-                        }
-                    }
-                };
-                new Razorpay(options).open();
-            } catch (e) {
-                resultEl.textContent = e.message || 'Failed to start checkout';
-                resultEl.className = 'auth-message error';
-                resultEl.style.display = 'block';
-            }
-        }
-
         document.addEventListener('DOMContentLoaded', loadPlans);
     </script>
 </body>
