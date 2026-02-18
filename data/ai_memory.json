@@ -351,5 +351,41 @@
       ],
       "last_seen": "2026-02-16T17:05:46.576116"
     }
+  },
+  "17841479708343466": {
+    "test_user_123": {
+      "history": [
+        {
+          "text": "Hello, this is a test message",
+          "role": "user",
+          "timestamp": "2026-02-18T17:23:20.173396"
+        },
+        {
+          "text": "Hello! 😊 Thanks for reaching out. How can I assist you today?",
+          "role": "assistant",
+          "timestamp": "2026-02-18T17:23:20.174004",
+          "reply": "Hello! 😊 Thanks for reaching out. How can I assist you today?"
+        }
+      ],
+      "tags": [],
+      "last_seen": "2026-02-18T17:23:20.174011"
+    },
+    "universal_levi": {
+      "history": [
+        {
+          "text": "Hello, this is a test message",
+          "role": "user",
+          "timestamp": "2026-02-18T17:24:27.195045"
+        },
+        {
+          "text": "Hello! 😊 Thanks for reaching out. How can I assist you today?",
+          "role": "assistant",
+          "timestamp": "2026-02-18T17:24:27.196161",
+          "reply": "Hello! 😊 Thanks for reaching out. How can I assist you today?"
+        }
+      ],
+      "tags": [],
+      "last_seen": "2026-02-18T17:24:27.196168"
+    }
   }
 }

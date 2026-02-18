@@ -55,9 +55,9 @@ accounts:
   instagram_business_id: null
   page_id: null
   user_access_token: null
-- account_id: '122182618658771896'
+- account_id: '17841479708343466'
   username: v3xxf
-  access_token: EAFxeGFhrhCgBQlAZBSGIxs81lN5JHWyRGODLYmEC6b9CXrng02ahARpKNZAYgw5fiZA0bKkojsqTZBZCCfuNZCQH6IqcBBQ8U9m6ZAc2EwrJ91mWIFK9jlR1sc4p7d7Cxt2NwvyNmgnKJFhLZAIhEEI1nXK8UQoplufwrIkdZBfcl6hZAKCFzUhS2eib2z33a0jabXpqfZBuAkH9Djp2BjxqyZAZAW1QblGB1WTEAZAh1etaBA99YHPg0A6dmeYqTn6yMYNjvpP79sEbP2uRoGR8Y4LQZBg6cZAPGwMmO9eVsAZDZD
+  access_token: IGAAXQWNSzNohBZAGFTbnU1UDNfV2pXcEtGZAjVOUUk3QXh1Q052WkxvcDlkcVpWZAVRqRE0wQ3VMUUhWZAFpkbHM5dWpBYlhkUElid3YxdzF1eEc2d2RHeDI1ZAmVtd21PV1d3czFRVDVYVmZA2TW9MYjVjbEJURGU2eHZADbDJhWENzUQZDZD
   basic_display_token: null
   password: null
   owner_id: 06d371de-e58e-4c0c-8c63-93f05566e41f
@@ -74,7 +74,7 @@ accounts:
     - like
     - comment
   comment_to_dm:
-    enabled: false
+    enabled: true
     trigger_keyword: AUTO
     dm_message_template: null
     link_to_send: null
