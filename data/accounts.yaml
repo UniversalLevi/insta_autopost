@@ -55,10 +55,12 @@ accounts:
   instagram_business_id: null
   page_id: null
   user_access_token: null
-- account_id: '17841457878364664'
-  username: universal_levi
-  access_token: IGAAXIeneXrCxBZAGJ4R3ZA3c2k1ZAXlfME0wUVVnU1VKUk1WWEUzYjN4Nmh4RGlEZAUFWUXVXZAmxrcnZANSjFCVDhBWVFsLW9ZASWc2ZAm1QSHRfWE1NM3FVU3FrSFJFdU9kNXhwbXJfMTQ3VFEzZAkFuak90NXBVbE9FdkJfcmlEQ1d1OAZDZD
-  password: q1w2e3r4t5y6
+- account_id: '122182618658771896'
+  username: v3xxf
+  access_token: EAFxeGFhrhCgBQlAZBSGIxs81lN5JHWyRGODLYmEC6b9CXrng02ahARpKNZAYgw5fiZA0bKkojsqTZBZCCfuNZCQH6IqcBBQ8U9m6ZAc2EwrJ91mWIFK9jlR1sc4p7d7Cxt2NwvyNmgnKJFhLZAIhEEI1nXK8UQoplufwrIkdZBfcl6hZAKCFzUhS2eib2z33a0jabXpqfZBuAkH9Djp2BjxqyZAZAW1QblGB1WTEAZAh1etaBA99YHPg0A6dmeYqTn6yMYNjvpP79sEbP2uRoGR8Y4LQZBg6cZAPGwMmO9eVsAZDZD
+  basic_display_token: null
+  password: null
+  owner_id: 06d371de-e58e-4c0c-8c63-93f05566e41f
   proxy:
     enabled: false
     host: null
@@ -72,8 +74,16 @@ accounts:
     - like
     - comment
   comment_to_dm:
-    enabled: true
+    enabled: false
+    trigger_keyword: AUTO
+    dm_message_template: null
     link_to_send: null
+    daily_dm_limit: 50
+    cooldown_seconds: 5
   ai_dm:
     enabled: true
     auto_send: true
+  expires_at: null
+  instagram_business_id: null
+  page_id: null
+  user_access_token: null

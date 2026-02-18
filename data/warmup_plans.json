@@ -20,13 +20,89 @@
       "start_date": "2026-02-02",
       "current_day": 1,
       "status": "active",
-      "last_action_time": null,
+      "last_action_time": "2026-02-09T14:46:57.500360",
       "risk_score": 0,
-      "daily_actions_completed": {},
-      "completed_tasks": [],
+      "daily_actions_completed": {
+        "day1": [
+          {
+            "task_id": "day1_like",
+            "done_at": "2026-02-09T09:48:55.781569"
+          },
+          {
+            "task_id": "day1_like",
+            "done_at": "2026-02-09T09:49:53.297764"
+          },
+          {
+            "task_id": "day1_like",
+            "done_at": "2026-02-09T09:50:48.728293"
+          },
+          {
+            "task_id": "day1_save",
+            "done_at": "2026-02-09T09:55:01.990535"
+          },
+          {
+            "task_id": "day1_save",
+            "done_at": "2026-02-09T09:55:55.048137"
+          },
+          {
+            "task_id": "day1_save",
+            "done_at": "2026-02-09T09:56:47.169081"
+          },
+          {
+            "task_id": "day1_like",
+            "done_at": "2026-02-09T14:45:05.025463"
+          },
+          {
+            "task_id": "day1_like",
+            "done_at": "2026-02-09T14:46:01.007409"
+          },
+          {
+            "task_id": "day1_like",
+            "done_at": "2026-02-09T14:46:57.500345"
+          }
+        ]
+      },
+      "completed_tasks": [
+        {
+          "task_id": "day1_like",
+          "done_at": "2026-02-09T09:48:55.781569"
+        },
+        {
+          "task_id": "day1_like",
+          "done_at": "2026-02-09T09:49:53.297764"
+        },
+        {
+          "task_id": "day1_like",
+          "done_at": "2026-02-09T09:50:48.728293"
+        },
+        {
+          "task_id": "day1_save",
+          "done_at": "2026-02-09T09:55:01.990535"
+        },
+        {
+          "task_id": "day1_save",
+          "done_at": "2026-02-09T09:55:55.048137"
+        },
+        {
+          "task_id": "day1_save",
+          "done_at": "2026-02-09T09:56:47.169081"
+        },
+        {
+          "task_id": "day1_like",
+          "done_at": "2026-02-09T14:45:05.025463"
+        },
+        {
+          "task_id": "day1_like",
+          "done_at": "2026-02-09T14:46:01.007409"
+        },
+        {
+          "task_id": "day1_like",
+          "done_at": "2026-02-09T14:46:57.500345"
+        }
+      ],
       "notes": "\nPaused: Paused by user",
       "created_at": "2026-02-02T20:40:09.040315",
-      "updated_at": "2026-02-06T16:57:01.800848"
+      "updated_at": "2026-02-09T14:46:57.500665"
     },
     {
       "account_id": "17841457878364664",
@@ -34,14 +110,82 @@
       "start_date": "2026-02-08",
       "current_day": 1,
       "status": "active",
-      "last_action_time": null,
+      "last_action_time": "2026-02-09T15:00:17.873108",
       "risk_score": 0,
-      "daily_actions_completed": {},
-      "completed_tasks": [],
+      "daily_actions_completed": {
+        "day1": [
+          {
+            "task_id": "day1_like",
+            "done_at": "2026-02-09T10:12:43.591374"
+          },
+          {
+            "task_id": "day1_like",
+            "done_at": "2026-02-09T10:13:41.703298"
+          },
+          {
+            "task_id": "day1_like",
+            "done_at": "2026-02-09T10:14:41.113953"
+          },
+          {
+            "task_id": "day1_save",
+            "done_at": "2026-02-09T10:18:57.480696"
+          },
+          {
+            "task_id": "day1_save",
+            "done_at": "2026-02-09T10:19:49.595497"
+          },
+          {
+            "task_id": "day1_save",
+            "done_at": "2026-02-09T10:20:41.167803"
+          },
+          {
+            "task_id": "day1_like",
+            "done_at": "2026-02-09T14:59:17.933225"
+          },
+          {
+            "task_id": "day1_like",
+            "done_at": "2026-02-09T15:00:17.873090"
+          }
+        ]
+      },
+      "completed_tasks": [
+        {
+          "task_id": "day1_like",
+          "done_at": "2026-02-09T10:12:43.591374"
+        },
+        {
+          "task_id": "day1_like",
+          "done_at": "2026-02-09T10:13:41.703298"
+        },
+        {
+          "task_id": "day1_like",
+          "done_at": "2026-02-09T10:14:41.113953"
+        },
+        {
+          "task_id": "day1_save",
+          "done_at": "2026-02-09T10:18:57.480696"
+        },
+        {
+          "task_id": "day1_save",
+          "done_at": "2026-02-09T10:19:49.595497"
+        },
+        {
+          "task_id": "day1_save",
+          "done_at": "2026-02-09T10:20:41.167803"
+        },
+        {
+          "task_id": "day1_like",
+          "done_at": "2026-02-09T14:59:17.933225"
+        },
+        {
+          "task_id": "day1_like",
+          "done_at": "2026-02-09T15:00:17.873090"
+        }
+      ],
       "notes": "",
       "created_at": "2026-02-08T18:30:02.172181",
-      "updated_at": "2026-02-08T18:30:02.172181"
+      "updated_at": "2026-02-09T15:00:17.873357"
     }
   ],
-  "updated_at": "2026-02-08T18:30:02.176717"
+  "updated_at": "2026-02-09T15:00:17.873505"
 }

@@ -35,6 +35,42 @@
       "created_by": null,
       "subscription_plan": "pro",
       "subscription_expires_at": null
+    },
+    {
+      "id": "85ee3c62-503e-4f08-8b86-e53e4943fd83",
+      "username": "tony",
+      "email": null,
+      "password_hash": "$2b$12$UO8xAtV4V3ktTIwo6S8RXO1Sn6xaXjBBVam3tE7i43errSpxjFD/.",
+      "role": "user",
+      "created_at": "2026-02-10T17:32:45.344921",
+      "is_active": true,
+      "created_by": null,
+      "subscription_plan": "free",
+      "subscription_expires_at": null
+    },
+    {
+      "id": "06d371de-e58e-4c0c-8c63-93f05566e41f",
+      "username": "levi",
+      "email": null,
+      "password_hash": "$2b$12$4Ss8nJpcC5g7PXAFyuEVPu4MYY6Z3Runy1N40iDuAC8NSU.knnXAe",
+      "role": "user",
+      "created_at": "2026-02-13T17:06:41.528361",
+      "is_active": true,
+      "created_by": null,
+      "subscription_plan": "free",
+      "subscription_expires_at": null
+    },
+    {
+      "id": "51438b2e-432e-48c5-9928-f1f0c6364f08",
+      "username": "kk",
+      "email": null,
+      "password_hash": "$2b$12$wG2o95L3G10DxXfB0TjoHu3m0JmpmB3fcDBrDz/.blnNCzI4NXLN2",
+      "role": "user",
+      "created_at": "2026-02-15T15:21:01.741128",
+      "is_active": true,
+      "created_by": null,
+      "subscription_plan": "pro",
+      "subscription_expires_at": null
     }
   ]
 }
