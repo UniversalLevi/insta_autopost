@@ -681,19 +681,17 @@ class CommentToDMService:
                 has_link=link_to_send is not None,
             )
         
-        # If no link is available, skip (or send message without link – see below)
+        # Allow sending DMs even when no link: use template or default message (e.g. "Thanks for commenting! Message us to get the link.")
+        # Previously we required link_to_send and skipped with no_link_configured; now we only require automation to be enabled.
         if not link_to_send:
-            result["reason"] = "no_link_configured"
             logger.info(
-                "Comment-to-DM skipped: no link configured. Set link_to_send in Settings → Comment-to-DM (or per-post link) to send links via DM.",
+                "Comment-to-DM: no link configured; will send message using template or default (e.g. 'Message us to get the link').",
                 account_id=account_id,
                 media_id=media_id,
-                has_post_config=post_config is not None,
             )
-            return result
         
         # If link is file://, we still send a DM but message will not contain the raw path (handled in _generate_dm_message)
-        if link_to_send.strip().lower().startswith("file://"):
+        if link_to_send and link_to_send.strip().lower().startswith("file://"):
             logger.info(
                 "Link is file:// – DM will ask user to message for file. For automatic link, use a public URL in link_to_send.",
                 account_id=account_id,
