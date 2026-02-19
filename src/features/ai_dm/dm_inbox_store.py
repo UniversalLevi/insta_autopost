@@ -46,6 +46,18 @@ def _conv_key(account_id: str, user_id: str) -> str:
     return f"{account_id}:{user_id}"
 
 
+def get_inbox_stats() -> Dict[str, Any]:
+    """Return basic stats for config verification (file exists, message count, conversation count)."""
+    data = _load()
+    messages = data.get("messages") or []
+    conversations = data.get("conversations") or {}
+    return {
+        "file_exists": INBOX_FILE.exists(),
+        "message_count": len(messages),
+        "conversation_count": len(conversations),
+    }
+
+
 def add_message(
     account_id: str,
     user_id: str,

@@ -44,6 +44,16 @@
         </div>
     </div>
 
+    <!-- Verify DM config (why DMs might not show in Inbox) -->
+    <div class="card">
+        <h2>🔍 Verify DM Config</h2>
+        <p class="text-sm text-muted" style="margin-bottom: 1rem;">Check why DMs from another account might not appear in the DM Inbox. For accounts with "Not set", use <strong>Fetch ID</strong> (tries token) or paste the Instagram Business ID from Meta and click <strong>Set ID</strong>. You can get the ID from Meta App → Webhooks (see <code>entry.id</code> in a real webhook payload when someone DMs that account) or from Business Suite → Settings → Instagram account.</p>
+        <button id="verify-dm-config" class="btn btn-primary">
+            <span class="icon">🔍</span> Verify config
+        </button>
+        <div id="dm-config-result" class="mt-3" style="display: none;"></div>
+    </div>
+
     <!-- AI DM Status -->
     <div class="card">
         <h2>🤖 AI DM Auto-Reply Status</h2>
@@ -494,6 +504,128 @@ async function testWebhook() {
         resultDiv.innerHTML = '<div class="error-message">Error: ' + error.message + '</div>';
     }
 }
+
+async function loadDMConfigStatus() {
+    const resultDiv = document.getElementById('dm-config-result');
+    if (!resultDiv) return;
+    resultDiv.style.display = 'block';
+    resultDiv.innerHTML = '<div class="webhook-loading-state"><span class="loading-spinner-inline"></span><span>Checking config...</span></div>';
+    try {
+        const response = await fetch('/api/webhooks/dm-config-status', { credentials: 'include' });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            resultDiv.innerHTML = '<div class="error-message">' + escapeHtml(data.detail || data.message || 'HTTP ' + response.status) + '</div>';
+            return;
+        }
+        const ok = data.ok === true;
+        let html = '<div class="status-item ' + (ok ? 'ok' : 'warning') + '" style="margin-bottom: 1rem; padding: 12px; border-radius: 8px; border-left: 4px solid ' + (ok ? 'var(--success)' : 'var(--warning)') + ';">';
+        html += '<strong>' + (ok ? '✅ Config OK' : '⚠️ Issues found') + '</strong></div>';
+        if (data.webhook) {
+            html += '<div class="status-item" style="margin-bottom: 0.75rem;"><strong>Webhook</strong><br>';
+            html += 'Production URL: <code style="word-break: break-all;">' + escapeHtml(data.webhook.production_url || '') + '</code><br>';
+            html += 'BASE_URL set: ' + (data.webhook.base_url_set ? 'Yes' : 'No') + (data.webhook.base_url_value && data.webhook.base_url_value !== '(not set)' ? ' (' + escapeHtml(data.webhook.base_url_value) + ')' : '') + '<br>';
+            html += 'Verify token set: ' + (data.webhook.verify_token_set ? 'Yes' : 'No') + '</div>';
+        }
+        if (data.accounts && data.accounts.length) {
+            html += '<div class="status-item" style="margin-bottom: 0.75rem;"><strong>Accounts</strong><br>';
+            data.accounts.forEach(function(acc) {
+                const bid = acc.instagram_business_id || 'Not set';
+                const bad = !acc.has_instagram_business_id;
+                html += '<div class="dm-config-account-row" style="margin-bottom: 0.5rem;">';
+                html += '<span>' + escapeHtml(acc.username || acc.account_id) + ': <code class="' + (bad ? 'error' : '') + '">' + escapeHtml(bid) + '</code></span>';
+                if (bad) {
+                    html += ' <button type="button" class="btn btn-secondary btn-sm fetch-ig-bid" data-account-id="' + escapeHtml(acc.account_id) + '" data-username="' + escapeHtml(acc.username || '') + '" style="margin-left: 8px;">Fetch ID</button>';
+                    html += ' <input type="text" class="form-control set-ig-bid-input" data-account-id="' + escapeHtml(acc.account_id) + '" placeholder="Paste Instagram Business ID" style="display: inline-block; width: 220px; margin-left: 8px; padding: 4px 8px;">';
+                    html += ' <button type="button" class="btn btn-primary btn-sm set-ig-bid" data-account-id="' + escapeHtml(acc.account_id) + '" style="margin-left: 4px;">Set ID</button>';
+                }
+                html += '</div>';
+            });
+            html += '</div>';
+        }
+        if (data.inbox) {
+            html += '<div class="status-item" style="margin-bottom: 0.75rem;"><strong>Inbox</strong> ';
+            html += 'Messages: ' + (data.inbox.message_count || 0) + ', Conversations: ' + (data.inbox.conversation_count || 0);
+            if (!data.inbox.file_exists) html += ' (file not created yet)';
+            html += '</div>';
+        }
+        if (data.issues && data.issues.length) {
+            html += '<div class="status-item" style="margin-bottom: 0.75rem; color: var(--error);"><strong>Issues</strong><ul style="margin: 0.25rem 0 0 1rem;">';
+            data.issues.forEach(function(i) { html += '<li>' + escapeHtml(i) + '</li>'; });
+            html += '</ul></div>';
+        }
+        if (data.tips && data.tips.length) {
+            html += '<div class="status-item" style="margin-bottom: 0; padding: 10px; background: var(--bg-hover); border-radius: 8px;"><strong>Next steps</strong><ul style="margin: 0.25rem 0 0 1rem;">';
+            data.tips.forEach(function(t) { html += '<li>' + escapeHtml(t) + '</li>'; });
+            html += '</ul></div>';
+        }
+        resultDiv.innerHTML = html;
+    } catch (error) {
+        resultDiv.innerHTML = '<div class="error-message">Error: ' + escapeHtml(error.message || 'Unknown error') + '</div>';
+    }
+}
+
+document.getElementById('verify-dm-config').addEventListener('click', () => {
+    document.getElementById('dm-config-result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    loadDMConfigStatus();
+});
+
+document.getElementById('dm-config-result').addEventListener('click', async (e) => {
+    const fetchBtn = e.target.closest('.fetch-ig-bid');
+    const setBtn = e.target.closest('.set-ig-bid');
+    if (fetchBtn) {
+        const accountId = fetchBtn.dataset.accountId;
+        const username = fetchBtn.dataset.username || '';
+        fetchBtn.disabled = true;
+        fetchBtn.textContent = 'Fetching...';
+        try {
+            const r = await fetch('/api/webhooks/fetch-instagram-business-id', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ username: username || undefined, account_id: accountId || undefined })
+            });
+            const d = await r.json().catch(() => ({}));
+            if (d.status === 'success') {
+                loadDMConfigStatus();
+            } else {
+                alert(d.message || d.detail || 'Could not fetch ID. Set it manually using the input and Set ID.');
+            }
+        } catch (err) {
+            alert(err.message || 'Request failed');
+        }
+        fetchBtn.disabled = false;
+        fetchBtn.textContent = 'Fetch ID';
+    }
+    if (setBtn) {
+        const accountId = setBtn.dataset.accountId;
+        const row = setBtn.closest('.dm-config-account-row');
+        const input = row ? row.querySelector('.set-ig-bid-input') : null;
+        const igBid = (input && input.value) ? input.value.trim() : '';
+        if (!igBid) {
+            alert('Enter the Instagram Business ID (numeric) then click Set ID.');
+            return;
+        }
+        setBtn.disabled = true;
+        try {
+            const r = await fetch('/api/config/accounts/' + encodeURIComponent(accountId) + '/instagram-business-id', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ instagram_business_id: igBid })
+            });
+            const d = await r.json().catch(() => ({}));
+            if (r.ok && d.status === 'success') {
+                if (input) input.value = '';
+                loadDMConfigStatus();
+            } else {
+                alert(d.detail || d.message || 'Failed to set ID');
+            }
+        } catch (err) {
+            alert(err.message || 'Request failed');
+        }
+        setBtn.disabled = false;
+    }
+});
 
 document.getElementById('refresh-status').addEventListener('click', () => {
     loadWebhookConfig();  // Refresh overwrites server-rendered config

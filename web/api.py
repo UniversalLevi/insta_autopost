@@ -2521,6 +2521,206 @@ async def get_webhook_callback_url():
     }
 
 
+@router.get("/webhooks/dm-config-status")
+async def get_webhook_dm_config_status(
+    app: InstaForgeApp = Depends(get_app),
+    admin: User = Depends(require_admin),
+):
+    """
+    Verify why DMs might not appear in the inbox. Checks:
+    - BASE_URL (Meta must be able to reach this URL to send webhooks)
+    - WEBHOOK_VERIFY_TOKEN
+    - Each account's instagram_business_id (must match Meta's entry.id in webhook)
+    - Inbox store stats (whether any DMs have been received)
+    """
+    from web.webhook_config import get_webhook_config
+    from src.features.ai_dm.dm_inbox_store import get_inbox_stats
+
+    cfg = get_webhook_config()
+    base_url = (os.getenv("BASE_URL") or os.getenv("APP_URL") or "").strip().rstrip("/")
+    production_url = cfg.get("production_url", "")
+    verify_token = cfg.get("verify_token", "")
+
+    issues = []
+    tips = []
+
+    if not base_url:
+        issues.append("BASE_URL (or APP_URL) is not set. Meta cannot send webhooks to your server without a public URL.")
+        tips.append("Set BASE_URL in .env to your public URL (e.g. https://yourdomain.com). Use ngrok for local testing.")
+    else:
+        if base_url.startswith("http://localhost") or "127.0.0.1" in base_url:
+            tips.append("BASE_URL is localhost. Meta cannot reach it. Use a tunnel (e.g. ngrok) and set BASE_URL to the tunnel URL.")
+
+    if not verify_token:
+        issues.append("WEBHOOK_VERIFY_TOKEN is not set. Meta webhook verification may fail.")
+        tips.append("Set WEBHOOK_VERIFY_TOKEN in .env and use the same value in Meta App → Webhooks → Verify token.")
+
+    accounts_status = []
+    try:
+        accounts = app.account_service.list_accounts()
+        for acc in accounts:
+            ig_bid = getattr(acc, "instagram_business_id", None)
+            has_ig_bid = bool(ig_bid and str(ig_bid).strip())
+            accounts_status.append({
+                "account_id": acc.account_id,
+                "username": getattr(acc, "username", None) or acc.account_id,
+                "instagram_business_id": ig_bid,
+                "has_instagram_business_id": has_ig_bid,
+            })
+            if not has_ig_bid:
+                issues.append(f"Account '{getattr(acc, 'username', acc.account_id)}' has no instagram_business_id. Webhook events use entry.id (IG business ID) to match accounts; without it, DMs won't be linked to this account.")
+        if not accounts:
+            issues.append("No accounts configured. Add an Instagram account first.")
+    except Exception as e:
+        issues.append(f"Could not list accounts: {str(e)}")
+        tips.append("Ensure the app and account service are initialized.")
+
+    if not issues and accounts_status:
+        tips.append("In Meta App: Webhooks → Instagram → Subscribe to 'messages' (and optionally 'messaging_postbacks') so DMs are sent to your callback URL.")
+        tips.append("Send a test DM from another Instagram account to your business account; then refresh the DM Inbox. If it still doesn't appear, check server logs for 'WEBHOOK POST' and 'AI_DM_WEBHOOK'.")
+
+    inbox_stats = get_inbox_stats()
+    if inbox_stats.get("message_count", 0) == 0 and inbox_stats.get("conversation_count", 0) == 0:
+        tips.append("No DMs have been stored yet. After fixing config, send a real DM from another account and check again.")
+
+    return {
+        "webhook": {
+            "production_url": production_url,
+            "base_url_set": bool(base_url),
+            "verify_token_set": bool(verify_token),
+            "base_url_value": base_url or "(not set)",
+        },
+        "accounts": accounts_status,
+        "inbox": inbox_stats,
+        "issues": issues,
+        "tips": tips,
+        "ok": len(issues) == 0,
+    }
+
+
+def _fetch_ig_business_id_from_token(access_token: str, user_access_token: Optional[str] = None) -> Optional[str]:
+    """
+    Try to get Instagram Business Account ID using the account's token(s).
+    Tries: (1) graph.instagram.com/me with access_token; (2) if user_access_token, /me/accounts and page's instagram_business_account.
+    """
+    import requests
+    base_ig = "https://graph.instagram.com/v18.0"
+    base_fb = "https://graph.facebook.com/v18.0"
+    # 1) Instagram Graph API "me" - with page/IG token this may return the IG business account id
+    try:
+        r = requests.get(
+            f"{base_ig}/me",
+            params={"fields": "id", "access_token": access_token},
+            timeout=15,
+        )
+        data = r.json()
+        if "error" not in data and data.get("id"):
+            return str(data["id"]).strip()
+    except Exception:
+        pass
+    # 2) If we have user token, get pages and then instagram_business_account
+    if user_access_token:
+        try:
+            page_id, ig_id, _ = _fetch_instagram_business_account(user_access_token)
+            return str(ig_id).strip() if ig_id else None
+        except Exception:
+            pass
+    return None
+
+
+@router.post("/webhooks/fetch-instagram-business-id")
+async def fetch_instagram_business_id(
+    body: dict,
+    app: InstaForgeApp = Depends(get_app),
+    admin: User = Depends(require_admin),
+):
+    """
+    Try to fetch Instagram Business ID for an account using its token(s) and save it.
+    Body: { "account_id": "..." } or { "username": "v3xxf" }. Returns { "status", "instagram_business_id" }.
+    """
+    account_id_param = body.get("account_id") or body.get("account")
+    username_param = (body.get("username") or "").strip()
+    if not account_id_param and not username_param:
+        raise HTTPException(status_code=400, detail="Provide account_id or username")
+    accounts = config_manager.load_accounts()
+    acc = None
+    for a in accounts:
+        if account_id_param and a.account_id == account_id_param:
+            acc = a
+            break
+        if username_param and (getattr(a, "username", None) or "").strip().lower() == username_param.lower():
+            acc = a
+            break
+    if not acc:
+        raise HTTPException(status_code=404, detail="Account not found")
+    token = (acc.access_token or "").strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="Account has no access token")
+    user_token = getattr(acc, "user_access_token", None) or None
+    if user_token:
+        user_token = (user_token or "").strip() or None
+    ig_bid = _fetch_ig_business_id_from_token(token, user_token)
+    if not ig_bid:
+        return {
+            "status": "unavailable",
+            "message": "Could not get Instagram Business ID from token. Set it manually in Config or paste it in Webhook Test → Verify DM Config.",
+            "account_id": acc.account_id,
+            "username": getattr(acc, "username", None),
+        }
+    # Update account with the fetched ID
+    update_dict = acc.dict()
+    update_dict["instagram_business_id"] = ig_bid
+    updated = Account(**update_dict)
+    for i, a in enumerate(accounts):
+        if a.account_id == acc.account_id:
+            accounts[i] = updated
+            break
+    config_manager.save_accounts(accounts)
+    app.accounts = accounts
+    app.account_service.update_accounts(accounts)
+    return {
+        "status": "success",
+        "instagram_business_id": ig_bid,
+        "account_id": acc.account_id,
+        "username": getattr(acc, "username", None),
+    }
+
+
+@router.patch("/config/accounts/{account_id}/instagram-business-id")
+async def set_instagram_business_id(
+    account_id: str,
+    request: Request,
+    app: InstaForgeApp = Depends(get_app),
+    admin: User = Depends(require_admin),
+):
+    """
+    Set instagram_business_id for an account (for DM webhook matching). Body: { "instagram_business_id": "123456" }.
+    """
+    body = await request.json()
+    ig_bid = (body.get("instagram_business_id") or "").strip()
+    if not ig_bid:
+        raise HTTPException(status_code=400, detail="instagram_business_id required")
+    accounts = config_manager.load_accounts()
+    found = False
+    for i, acc in enumerate(accounts):
+        if acc.account_id == account_id:
+            update_dict = acc.dict()
+            update_dict["instagram_business_id"] = ig_bid
+            accounts[i] = Account(**update_dict)
+            found = True
+            break
+    if not found:
+        raise HTTPException(status_code=404, detail="Account not found")
+    config_manager.save_accounts(accounts)
+    app.accounts = accounts
+    app.account_service.update_accounts(accounts)
+    return {
+        "status": "success",
+        "account_id": account_id,
+        "instagram_business_id": ig_bid,
+    }
+
+
 # --- Comment-to-DM Endpoints ---
 
 @router.get("/comment-to-dm/status")
