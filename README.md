@@ -115,6 +115,22 @@ Uses `render.yaml` and `Procfile`. Set env vars in Render dashboard.
 2. Copy `deploy/instaforge.service` to `/etc/systemd/system/`, edit WorkingDirectory and paths, then `systemctl enable instaforge && systemctl start instaforge`
 3. Use Let's Encrypt for SSL; ensure `data/` and `uploads/` are persistent
 
+### Production with PM2 (keep running, auto-restart)
+The app is configured to run under PM2 so it restarts on crash, restarts if memory exceeds a limit, and uses exponential backoff to avoid restart loops.
+
+1. Set `ENVIRONMENT=production` (e.g. in `.env` or in the ecosystem config).
+2. From the project root:
+   ```bash
+   pm2 start ecosystem.config.cjs
+   ```
+3. Optional: save the process list and enable startup on boot:
+   ```bash
+   pm2 save
+   pm2 startup
+   ```
+4. Logs: `logs/pm2-out.log` and `logs/pm2-err.log`. Use `pm2 logs instaforge` to tail.
+5. To disable the optional daily 4 AM restart, edit `ecosystem.config.cjs` and remove or comment out the `cron_restart` line.
+
 ---
 
 ## Configuration
