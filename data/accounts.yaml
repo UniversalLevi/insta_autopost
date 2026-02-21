@@ -52,7 +52,7 @@ accounts:
     enabled: true
     auto_send: true
   expires_at: null
-  instagram_business_id: null
+  instagram_business_id: '25549764884725706'
   page_id: null
   user_access_token: null
 - account_id: '17841479708343466'
@@ -84,6 +84,6 @@ accounts:
     enabled: true
     auto_send: true
   expires_at: null
-  instagram_business_id: null
+  instagram_business_id: '25801972869455979'
   page_id: null
   user_access_token: null
