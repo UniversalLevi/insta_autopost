@@ -226,7 +226,10 @@ class CommentMonitor:
                     self._run_one_cycle_for_account(account_id)
             except Exception as e:
                 logger.error("Comment monitor cron cycle error", error=str(e))
-            self._global_stop.wait(timeout=self.check_interval_seconds)
+            try:
+                self._global_stop.wait(timeout=self.check_interval_seconds)
+            except Exception as e:
+                logger.warning("Comment monitor wait error", error=str(e))
         logger.info("Comment monitor cron stopped")
 
     def start_monitoring(self, account_id: str) -> None:

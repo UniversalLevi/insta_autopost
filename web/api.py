@@ -2959,11 +2959,15 @@ async def get_accounts_status(
         results = await run_in_threadpool(app.account_health_service.check_all_accounts)
         
         # Same visibility as get_accounts: admins see all; others see owner_id == self or None
-        accounts = config_manager.load_accounts()
-        if current_user.role != "admin":
-            visible_ids = {acc.account_id for acc in accounts if acc.owner_id == current_user.id or acc.owner_id is None}
-        else:
-            visible_ids = {acc.account_id for acc in accounts}
+        try:
+            accounts = config_manager.load_accounts()
+            if current_user.role != "admin":
+                visible_ids = {acc.account_id for acc in accounts if getattr(acc, "owner_id", None) == current_user.id or getattr(acc, "owner_id", None) is None}
+            else:
+                visible_ids = {acc.account_id for acc in accounts}
+        except Exception as e:
+            logger.warning("Account visibility filter failed, showing all", error=str(e))
+            visible_ids = set(results.keys())
         
         # Format response (only accounts the user is allowed to see)
         status_list = []

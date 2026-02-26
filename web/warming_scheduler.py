@@ -22,8 +22,10 @@ def _scheduler_loop():
             schedule.run_pending()
         except Exception as e:
             logger.error("Error in warming scheduler loop", error=str(e))
-        # Check every minute for scheduled tasks
-        _stop.wait(60)
+        try:
+            _stop.wait(60)
+        except Exception as e:
+            logger.warning("Warming scheduler wait error", error=str(e))
     
     logger.info("Warming scheduler loop stopped")
 

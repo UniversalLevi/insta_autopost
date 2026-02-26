@@ -155,11 +155,16 @@ _refresh_thread: Optional[threading.Thread] = None
 
 def _daily_refresh_loop(app: Any, interval_seconds: int = 86400) -> None:
     """Run token refresh every interval_seconds (default 24h). First run after 60s."""
+    import time
     logger.info("Token refresh daily job started", interval_seconds=interval_seconds)
     first = True
     while not _refresh_stop.is_set():
         if not first:
-            _refresh_stop.wait(interval_seconds)
+            try:
+                _refresh_stop.wait(interval_seconds)
+            except Exception as e:
+                logger.warning("Token refresh wait error", error=str(e))
+                time.sleep(min(3600, interval_seconds))
         first = False
         if _refresh_stop.is_set():
             break

@@ -190,7 +190,11 @@ def _loop(app, interval_seconds: int = 60):
             _run_once(app)
         except Exception as e:
             logger.warning("Scheduled publisher cycle error", error=str(e))
-        _stop.wait(interval_seconds)
+        try:
+            _stop.wait(interval_seconds)
+        except Exception as e:
+            logger.warning("Scheduled publisher wait error", error=str(e))
+            time.sleep(min(60, interval_seconds))
 
 
 def start_scheduled_publisher(app, interval_seconds: int = 60) -> None:

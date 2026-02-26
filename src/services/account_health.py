@@ -223,9 +223,10 @@ class AccountHealthService:
                 self.check_all_accounts()
             except Exception as e:
                 logger.error("Error in health monitoring loop", error=str(e))
-            
-            # Wait for next check interval
-            self.stop_event.wait(timeout=self.check_interval_seconds)
+            try:
+                self.stop_event.wait(timeout=self.check_interval_seconds)
+            except Exception as e:
+                logger.warning("Health monitor wait error", error=str(e))
         
         logger.info("Health monitoring loop stopped")
     

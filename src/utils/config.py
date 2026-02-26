@@ -13,7 +13,10 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
 from .exceptions import ConfigError
+from .logger import get_logger
 from ..models.account import Account, ProxyConfig, WarmingConfig, CommentToDMConfig
+
+logger = get_logger(__name__)
 
 # Load environment variables
 load_dotenv()
@@ -141,21 +144,32 @@ class ConfigManager:
         return self._settings
 
     def load_accounts(self) -> List[Account]:
-        """Load and validate accounts.yaml"""
+        """Load and validate accounts.yaml. Skips invalid entries so one bad account does not break startup."""
         if not self.accounts_path.exists():
             return []
-            
-        with open(self.accounts_path, "r", encoding="utf-8") as f:
-            raw_data = yaml.safe_load(f) or {}
-            
+        try:
+            with open(self.accounts_path, "r", encoding="utf-8") as f:
+                raw_data = yaml.safe_load(f) or {}
+        except Exception as e:
+            logger.warning("Failed to read accounts file", path=str(self.accounts_path), error=str(e))
+            self._accounts = getattr(self, "_accounts", None) or []
+            return self._accounts
         raw_accounts = raw_data.get("accounts", [])
+        if not raw_accounts:
+            self._accounts = []
+            return []
         processed_accounts = self._substitute_env_vars(raw_accounts)
-        
         accounts = []
-        for acc_data in processed_accounts:
-            # Handle nested models if they are dicts
-            accounts.append(Account(**acc_data))
-            
+        for i, acc_data in enumerate(processed_accounts):
+            try:
+                accounts.append(Account(**acc_data))
+            except Exception as e:
+                account_id = (acc_data or {}).get("account_id") or (acc_data or {}).get("username") or f"index_{i}"
+                logger.warning(
+                    "Skipping invalid account in accounts.yaml",
+                    account_id=account_id,
+                    error=str(e),
+                )
         self._accounts = accounts
         return self._accounts
 

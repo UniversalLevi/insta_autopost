@@ -102,7 +102,11 @@ def _loop(app) -> None:
         check_interval_seconds=_check_interval_seconds,
     )
     while not _stop.is_set():
-        _stop.wait(_check_interval_seconds)
+        try:
+            _stop.wait(_check_interval_seconds)
+        except Exception as e:
+            logger.warning("Rest cycle wait error", error=str(e))
+            time.sleep(min(300, _check_interval_seconds))
         if _stop.is_set():
             break
         try:
@@ -120,7 +124,10 @@ def _loop(app) -> None:
             # Sleep for rest period (wake every 30s to check _stop so we can exit cleanly)
             slept = 0
             while slept < _rest_minutes * 60 and not _stop.is_set():
-                _stop.wait(min(30, _rest_minutes * 60 - slept))
+                try:
+                    _stop.wait(min(30, _rest_minutes * 60 - slept))
+                except Exception as e:
+                    logger.warning("Rest cycle rest-wait error", error=str(e))
                 slept += 30
             if _stop.is_set():
                 break
