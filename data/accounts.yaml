@@ -60,7 +60,7 @@ accounts:
   access_token: IGAAXQWNSzNohBZAGFTbnU1UDNfV2pXcEtGZAjVOUUk3QXh1Q052WkxvcDlkcVpWZAVRqRE0wQ3VMUUhWZAFpkbHM5dWpBYlhkUElid3YxdzF1eEc2d2RHeDI1ZAmVtd21PV1d3czFRVDVYVmZA2TW9MYjVjbEJURGU2eHZADbDJhWENzUQZDZD
   basic_display_token: null
   password: null
-  owner_id: 06d371de-e58e-4c0c-8c63-93f05566e41f
+  owner_id: null
   proxy:
     enabled: false
     host: null
@@ -73,10 +73,12 @@ accounts:
     action_types:
     - like
     - comment
+    - follow
+    - story_view
   comment_to_dm:
     enabled: true
     trigger_keyword: AUTO
-    dm_message_template: null
+    dm_message_template: "Hey {username} 👋 Thanks for commenting! Here's the link you requested: {link}"
     link_to_send: null
     daily_dm_limit: 50
     cooldown_seconds: 5

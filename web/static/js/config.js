@@ -11,7 +11,7 @@ async function loadAccounts() {
     list.innerHTML = '<div class="text-muted">Loading...</div>';
 
     try {
-        const response = await fetch('/api/config/accounts');
+        const response = await fetch('/api/config/accounts', { credentials: 'include' });
         const data = await response.json();
         
         if (!data.accounts || data.accounts.length === 0) {
@@ -339,7 +339,8 @@ async function saveAccount() {
         const response = await fetch(url, {
             method: method,
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(accountData)
+            body: JSON.stringify(accountData),
+            credentials: 'include'
         });
         
         if (!response.ok) {
@@ -357,7 +358,7 @@ async function saveAccount() {
 
 async function editAccount(accountId) {
     try {
-        const response = await fetch('/api/config/accounts');
+        const response = await fetch('/api/config/accounts', { credentials: 'include' });
         const data = await response.json();
         const account = data.accounts.find(a => a.account_id === accountId);
         
@@ -410,7 +411,8 @@ async function deleteAccount(accountId) {
     
     try {
         const response = await fetch(`/api/config/accounts/${accountId}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            credentials: 'include'
         });
         
         if (!response.ok) throw new Error('Failed to delete');

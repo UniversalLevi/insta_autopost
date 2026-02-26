@@ -666,16 +666,10 @@ document.getElementById('reload-accounts').addEventListener('click', async () =>
     }
 });
 
-// Remove initial loading immediately on page load to stop animation
+// Load on page load (loadAccountStatus replaces loading content)
 document.addEventListener('DOMContentLoaded', () => {
-    const initialLoading = document.getElementById('initial-loading');
-    if (initialLoading) {
-        initialLoading.remove();
-    }
+    loadAccountStatus();
 });
-
-// Load on page load
-loadAccountStatus();
 
 // Auto-refresh every 60 seconds (don't show loading spinner on auto-refresh)
 refreshInterval = setInterval(() => loadAccountStatus(false), 60000);

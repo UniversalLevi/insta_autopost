@@ -2950,7 +2950,7 @@ async def get_accounts_status(
     app: InstaForgeApp = Depends(get_app),
     current_user: User = Depends(require_auth),
 ):
-    """Get health status for all accounts"""
+    """Get health status for all accounts (filtered by ownership: same as config/accounts)"""
     try:
         if not app.account_health_service:
             raise HTTPException(status_code=500, detail="Health service not initialized")
@@ -2958,9 +2958,18 @@ async def get_accounts_status(
         # Run blocking health checks in thread pool so the async event loop doesn't block
         results = await run_in_threadpool(app.account_health_service.check_all_accounts)
         
-        # Format response
+        # Same visibility as get_accounts: admins see all; others see owner_id == self or None
+        accounts = config_manager.load_accounts()
+        if current_user.role != "admin":
+            visible_ids = {acc.account_id for acc in accounts if acc.owner_id == current_user.id or acc.owner_id is None}
+        else:
+            visible_ids = {acc.account_id for acc in accounts}
+        
+        # Format response (only accounts the user is allowed to see)
         status_list = []
         for account_id, result in results.items():
+            if account_id not in visible_ids:
+                continue
             try:
                 account = app.account_service.get_account(account_id)
                 status_list.append({

@@ -11,10 +11,18 @@ document.addEventListener('DOMContentLoaded', () => {
 // Accounts
 async function loadAccounts() {
     try {
-        const response = await fetch('/api/config/accounts');
+        const response = await fetch('/api/config/accounts', { credentials: 'include' });
         const data = await response.json();
         const container = document.getElementById('account-selector');
         
+        if (!response.ok) {
+            if (response.status === 401) {
+                container.innerHTML = '<div class="text-muted">Please <a href="/login">log in</a> to see accounts.</div>';
+            } else {
+                container.innerHTML = '<div class="text-error">Failed to load accounts.</div>';
+            }
+            return;
+        }
         if (!data.accounts || data.accounts.length === 0) {
             container.innerHTML = '<div class="text-muted">No accounts found. Go to Settings to add one.</div>';
             return;
