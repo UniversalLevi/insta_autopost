@@ -23,7 +23,8 @@ if __name__ == "__main__":
     PORT = int(os.getenv("PORT", "8001"))  # Default to 8001 to avoid conflicts
     HOST = os.getenv("HOST", "127.0.0.1")
     ENVIRONMENT = os.getenv("ENVIRONMENT", "production").lower()
-    WORKERS = int(os.getenv("WORKERS", "2"))
+    # Use 1 worker in production: background tasks (comment monitor, health, token refresh, etc.) run once; 2+ workers duplicate them and can cause instability.
+    WORKERS = int(os.getenv("WORKERS", "1"))
     
     print(f"Starting InstaForge in {ENVIRONMENT} mode...")
     print(f"Host: {HOST}, Port: {PORT}, Workers: {WORKERS}")
