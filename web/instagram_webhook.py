@@ -7,6 +7,7 @@ from src.utils.exceptions import AccountError
 from src.features.ai_dm import AIDMHandler
 from src.features.ai_dm.dm_inbox_store import add_message as inbox_add_message, update_suggestion as inbox_update_suggestion, mark_sent as inbox_mark_sent
 from src.features.dm_onboarding_handler import handle_onboarding_dm
+from src.features.dm_onboarding_store import get_session
 
 logger = get_logger(__name__)
 
@@ -394,6 +395,29 @@ def _process_incoming_dm_for_ai_reply(account_id: str, value: Dict[str, Any], ap
                     error_type=type(e).__name__,
                 )
         return
+
+    # If user is currently in onboarding flow (non-idle step), do not let AI DM take over
+    try:
+        session = get_session(account_id, str(user_id))
+        step = session.get("step") or "idle"
+        if step != "idle":
+            logger.info(
+                "AI_DM_WEBHOOK",
+                action="skipped",
+                reason="onboarding_in_progress",
+                account_id=account_id,
+                user_id=user_id,
+                onboarding_step=step,
+            )
+            return
+    except Exception as e:
+        logger.warning(
+            "AI_DM_WEBHOOK",
+            action="onboarding_state_read_failed",
+            account_id=account_id,
+            user_id=user_id,
+            error=str(e),
+        )
 
     # AI DM auto-reply: enabled by default when ai_dm is None (so DMs get replies); otherwise use account setting
     ai_dm_enabled = True

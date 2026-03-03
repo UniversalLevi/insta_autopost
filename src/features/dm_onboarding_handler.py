@@ -181,11 +181,13 @@ def handle_onboarding_dm(
 
     if not result.get("success"):
       attempt_count = int(session.get("attemptCount") or 0) + 1
+      # If backend complains about email/mobile, send user back to the first step
+      next_step = "awaiting_email_or_mobile" if attempt_count < 3 else "failed"
       update_session(
         account_id,
         user_id,
         {
-          "step": "failed" if attempt_count >= 3 else "awaiting_currency",
+          "step": next_step,
           "attemptCount": attempt_count,
         },
       )
@@ -195,7 +197,8 @@ def handle_onboarding_dm(
         "replyText": (
           "I hit an issue while talking to the store system.\n"
           f"Details: {error_message}\n\n"
-          "You can also create an account directly on the web app later."
+          "Please double-check your email or mobile and try again, "
+          "or create an account directly on the web app later."
         ),
       }
 
