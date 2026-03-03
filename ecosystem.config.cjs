@@ -1,54 +1,33 @@
-/**
- * PM2 ecosystem config for InstaForge (production).
- * Use: pm2 start ecosystem.config.cjs
- *
- * Keeps the app running by:
- * - Restarting on crash (autorestart)
- * - Restarting if memory exceeds limit (prevents OOM)
- * - Exponential backoff between restarts (avoids restart loops)
- * - Optional daily cron restart as a safety net (edit cron_restart to enable)
- */
-
 module.exports = {
   apps: [
     {
       name: "instaforge",
+
+      // Run your existing Python entrypoint
       script: "main.py",
-      interpreter: "python",
-      cwd: __dirname,
+      interpreter: "python3",          // or "python" if that's what you use
+      cwd: "/var/www/instaAutoPost",
 
-      // --- Restart behavior ---
+      // ---- Restart / stability ----
       autorestart: true,
-      max_restarts: 30,
-      min_uptime: "10s",
-      restart_delay: 2000,
-      exp_backoff_restart_delay: 100,
+      max_restarts: 20,
+      min_uptime: "20s",
+      restart_delay: 5000,
+      max_memory_restart: "800M",
 
-      // Restart if memory exceeds (adjust for your server; 600M is conservative)
-      max_memory_restart: "600M",
-
-      // Optional: force restart daily at 4:00 AM to clear stuck state / slow leaks.
-      // Remove or comment out if you don't want scheduled restarts.
-      cron_restart: "0 4 * * *",
-
-      // Graceful shutdown (give FastAPI/uvicorn time to close)
-      kill_timeout: 15000,
-      wait_ready: false,
-      listen_timeout: 10000,
-
-      // --- Logs ---
+      // ---- Logging ----
       out_file: "./logs/pm2-out.log",
-      error_file: "./logs/pm2-err.log",
+      error_file: "./logs/pm2-error.log",
       merge_logs: true,
       time: true,
 
-      // --- Environment ---
+      // ---- Env for main.py / web.main:app ----
       env: {
         ENVIRONMENT: "production",
-      },
-      env_production: {
-        ENVIRONMENT: "production",
-      },
-    },
-  ],
+        HOST: "127.0.0.1",
+        PORT: "8011",
+        WORKERS: "1"    // main.py uses this when ENVIRONMENT=production
+      }
+    }
+  ]
 };
