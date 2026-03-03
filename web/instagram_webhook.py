@@ -396,11 +396,17 @@ def _process_incoming_dm_for_ai_reply(account_id: str, value: Dict[str, Any], ap
                 )
         return
 
-    # If user is currently in onboarding flow (non-idle step), do not let AI DM take over
+    # If user is currently in onboarding flow (active, not failed/completed), do not let AI DM take over
     try:
         session = get_session(account_id, str(user_id))
         step = session.get("step") or "idle"
-        if step != "idle":
+        active_steps = {
+            "awaiting_email_or_mobile",
+            "awaiting_store_name",
+            "awaiting_currency",
+            "confirming",
+        }
+        if step in active_steps:
             logger.info(
                 "AI_DM_WEBHOOK",
                 action="skipped",

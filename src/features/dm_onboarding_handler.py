@@ -37,6 +37,21 @@ def handle_onboarding_dm(
   step = session.get("step") or "idle"
   data = session.get("data") or {}
 
+  # Allow user to restart flow after completion/failure by sending trigger again
+  if step in {"completed", "failed"} and _is_trigger(message_text):
+    session = update_session(
+      account_id,
+      user_id,
+      {
+        "step": "idle",
+        "data": {},
+        "attemptCount": 0,
+        "hasCreatedStore": False,
+      },
+    )
+    step = "idle"
+    data = session.get("data") or {}
+
   # If user explicitly starts flow
   if step == "idle":
     if not _is_trigger(message_text):
