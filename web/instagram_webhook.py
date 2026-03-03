@@ -6,6 +6,7 @@ from src.utils.logger import get_logger
 from src.utils.exceptions import AccountError
 from src.features.ai_dm import AIDMHandler
 from src.features.ai_dm.dm_inbox_store import add_message as inbox_add_message, update_suggestion as inbox_update_suggestion, mark_sent as inbox_mark_sent
+from src.features.dm_onboarding_handler import handle_onboarding_dm
 
 logger = get_logger(__name__)
 
@@ -330,6 +331,69 @@ def _process_incoming_dm_for_ai_reply(account_id: str, value: Dict[str, Any], ap
         )
     except Exception as e:
         logger.warning("DM inbox store failed", error=str(e), account_id=account_id, user_id=user_id)
+
+    # DM onboarding flow: handle store-creation onboarding before AI DM replies
+    try:
+        onboarding_result = handle_onboarding_dm(
+            account_id=account_id,
+            user_id=str(user_id),
+            username=username or "",
+            message_text=message_text,
+        )
+    except Exception as e:
+        logger.exception(
+            "DM_ONBOARDING",
+            action="handler_error",
+            account_id=account_id,
+            user_id=user_id,
+            message_id=message_id,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        onboarding_result = {"handled": False}
+
+    if onboarding_result.get("handled"):
+        reply_text = onboarding_result.get("replyText")
+        if reply_text:
+            try:
+                try:
+                    client = app.account_service.get_client(account_id)
+                except AccountError as e:
+                    logger.warning(
+                        "DM_ONBOARDING",
+                        action="send_failed",
+                        reason="client_not_found",
+                        account_id=account_id,
+                        user_id=user_id,
+                        error=str(e),
+                    )
+                    return
+
+                recipient_username = (username or "").strip()
+                dm_result = client.send_direct_message(
+                    recipient_username=recipient_username,
+                    message=reply_text,
+                    recipient_id=str(user_id) if user_id else None,
+                )
+                logger.info(
+                    "DM_ONBOARDING",
+                    action="reply_sent",
+                    account_id=account_id,
+                    user_id=user_id,
+                    message_id=message_id,
+                    status=dm_result.get("status"),
+                )
+            except Exception as e:
+                logger.exception(
+                    "DM_ONBOARDING",
+                    action="send_exception",
+                    account_id=account_id,
+                    user_id=user_id,
+                    message_id=message_id,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
+        return
 
     # AI DM auto-reply: enabled by default when ai_dm is None (so DMs get replies); otherwise use account setting
     ai_dm_enabled = True
